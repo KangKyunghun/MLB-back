@@ -236,25 +236,42 @@ public class DataInitializer implements ApplicationRunner {
                                 return;
                             }
  
-                            // 이미 존재하면 스킵
                             standingRepository.findBySeasonIdAndTeamId(season.getId(), team.getId())
-                                    .orElseGet(() -> standingRepository.save(
-                                        Standing.builder()
-                                            .league(league)
-                                            .season(season)
-                                            .team(team)
-                                            .rank(dto.getPosition())
-                                            .played(dto.getPlayedGames())
-                                            .won(dto.getWon())
-                                            .drawn(dto.getDraw())
-                                            .lost(dto.getLost())
-                                            .goalsFor(dto.getGoalsFor())
-                                            .goalsAgainst(dto.getGoalsAgainst())
-                                            .goalDiff(dto.getGoalDifference())
-                                            .points(dto.getPoints())
-                                            .form(dto.getForm())
-                                            .build()
-                                    ));
+                            .ifPresentOrElse(
+                                existing -> {
+                                    // 이미 있으면 업데이트
+                                    existing.update(
+                                        dto.getPosition(),
+                                        dto.getPlayedGames(),
+                                        dto.getWon(),
+                                        dto.getDraw(),
+                                        dto.getLost(),
+                                        dto.getGoalsFor(),
+                                        dto.getGoalsAgainst(),
+                                        dto.getGoalDifference(),
+                                        dto.getPoints(),
+                                        dto.getForm()
+                                    );
+                                    standingRepository.save(existing);
+                                },
+                                () -> standingRepository.save(
+                                    Standing.builder()
+                                        .league(league)
+                                        .season(season)
+                                        .team(team)
+                                        .rank(dto.getPosition())
+                                        .played(dto.getPlayedGames())
+                                        .won(dto.getWon())
+                                        .drawn(dto.getDraw())
+                                        .lost(dto.getLost())
+                                        .goalsFor(dto.getGoalsFor())
+                                        .goalsAgainst(dto.getGoalsAgainst())
+                                        .goalDiff(dto.getGoalDifference())
+                                        .points(dto.getPoints())
+                                        .form(dto.getForm())
+                                        .build()
+                                )
+                            );
                         }
                         log.info("순위 저장 완료: leagueId={}, year={}, {}팀",
                                 league.getId(), year, table.getTable().size());
@@ -282,8 +299,14 @@ public class DataInitializer implements ApplicationRunner {
             int savedCount = 0;
             for (FootballApiDto.MatchDto matchDto : response.getMatches()) {
  
-                // 이미 존재하면 스킵
-                if (matchRepository.existsById(matchDto.getId())) continue;
+                // 이미 존재하면 stage 업데이트 후 스킵
+                if (matchRepository.existsById(matchDto.getId())) {
+                    matchRepository.findById(matchDto.getId()).ifPresent(existing -> {
+                        existing.updateStage(matchDto.getStage());
+                        matchRepository.save(existing);
+                    });
+                    continue;
+                }
 
                 // 팀 ID 자체가 null인 경우 먼저 확인
                 if (matchDto.getHomeTeam() == null || matchDto.getHomeTeam().getId() == null ||
@@ -321,6 +344,7 @@ public class DataInitializer implements ApplicationRunner {
                         .matchDate(parseDateTime(matchDto.getUtcDate()))
                         .matchday(matchDto.getMatchday())
                         .status(matchDto.getStatus())
+                        .stage(matchDto.getStage())
                         .homeScore(homeScore)
                         .awayScore(awayScore)
                         .build()

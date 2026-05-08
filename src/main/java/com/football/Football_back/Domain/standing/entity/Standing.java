@@ -56,4 +56,19 @@ public class Standing {
     @Column(length = 20)
     private String form;               // 최근 5경기 (예: WWDLW)
 
+    public void update(Integer rank, Integer played, Integer won, Integer drawn,
+                       Integer lost, Integer goalsFor, Integer goalsAgainst,
+                       Integer goalDiff, Integer points, String form) {
+        this.rank = rank;
+        this.played = played;
+        this.won = won;
+        this.drawn = drawn;
+        this.lost = lost;
+        this.goalsFor = goalsFor;
+        this.goalsAgainst = goalsAgainst;
+        this.goalDiff = goalDiff;
+        this.points = points;
+        this.form = form;
+    }
+
 }

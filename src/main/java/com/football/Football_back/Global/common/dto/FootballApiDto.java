@@ -126,6 +126,7 @@ public class FootballApiDto {
         private Integer matchday;
         private String status;
         private String utcDate;
+        private String stage;
         private TeamDto homeTeam;
         private TeamDto awayTeam;
         private ScoreDto score;

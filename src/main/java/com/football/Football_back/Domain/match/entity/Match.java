@@ -52,4 +52,11 @@ public class Match extends BaseEntity {
     @Column(name = "away_score")
     private Integer awayScore; // 원정 팀 점수
 
+    @Column(length = 50)
+    private String stage; // 경기 단계 (GROUP_STAGE, KNOCKOUT_STAGE 등)
+
+    public void updateStage(String stage) {
+        this.stage = stage;
+    }
+
 }
