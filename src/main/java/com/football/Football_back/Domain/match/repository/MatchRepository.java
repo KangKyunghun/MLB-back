@@ -27,4 +27,10 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     // 라운드별 경기 조회
     List<Match> findBySeasonIdAndMatchday(Long seasonId, Integer matchday);
 
+    // stage별 경기 조회
+    List<Match> findBySeasonIdAndStage(Long seasonId, String stage);
+
+    // 토너먼트 경기 조회 (여러 stage)
+    List<Match> findBySeasonIdAndStageIn(Long seasonId, List<String> stages);
+
 }
