@@ -39,4 +39,3 @@ out/
 ### 민감 정보 ###
 src/main/resources/application.yaml
 src/main/resources/application.yml
-scripts/
