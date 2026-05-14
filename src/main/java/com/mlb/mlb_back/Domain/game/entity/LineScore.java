@@ -33,4 +33,5 @@ public class LineScore extends BaseEntity {
     private Integer hits;       // 안타
 
     private Integer errors;     // 실책
+
 }

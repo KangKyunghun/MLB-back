@@ -10,4 +10,11 @@ public interface SprayDataRepository extends JpaRepository<SprayData, Long> {
     List<SprayData> findByPlayerId(Long playerId);
 
     List<SprayData> findBySeason(Integer season);
+
+    long countBySeason(Integer season);
+
+    long countByGameId(Long gameId);
+
+    void deleteByGameId(Long gameId);
+
 }

@@ -33,6 +33,9 @@ public class Game extends BaseEntity {
     @Column(nullable = false)
     private Integer season;    // 시즌 연도 (2024, 2025, 2026)
 
+    @Column(name = "game_type", length = 20)
+    private String gameType;   // 정규시즌, 포스트시즌, 디비전, 월드시리즈
+
     @Column(length = 20)
     private String status;     // Preview, Live, Final, Postponed 등
 

@@ -10,4 +10,8 @@ public interface PitchDataRepository extends JpaRepository<PitchData, Long> {
     List<PitchData> findByPitcherId(Long pitcherId);
 
     List<PitchData> findByGameId(Long gameId);
+
+    long countByGameId(Long gameId);
+
+    void deleteByGameId(Long gameId);
 }

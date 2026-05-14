@@ -1,5 +1,6 @@
 package com.mlb.mlb_back.Domain.stat.entity;
 
+import com.mlb.mlb_back.Domain.game.entity.Game;
 import com.mlb.mlb_back.Domain.player.entity.Player;
 import com.mlb.mlb_back.Global.common.BaseEntity;
 import jakarta.persistence.*;
@@ -16,6 +17,10 @@ public class SprayData extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "game_id")
+    private Game game;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "player_id", nullable = false)
