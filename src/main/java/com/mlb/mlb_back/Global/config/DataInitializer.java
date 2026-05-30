@@ -82,9 +82,9 @@ public class DataInitializer implements ApplicationRunner {
             initPitcherStats(season);
             initLineScores(season);
             initBoxScores(season);
-            // initHotColdZones(season);
-            // initSprayData(season);
-            // initPitchData(season);
+            initHotColdZones(season);
+            initSprayData(season);
+            initPitchData(season);
         } 
 
         log.info("===== MLB DataInitializer 완료 =====");
@@ -746,7 +746,7 @@ public class DataInitializer implements ApplicationRunner {
 
         log.info("{} 시즌 PitchData 수집 시작...", season);
 
-        List<Game> games = gameRepository.findBySeason(season);
+        List<Game> games = gameRepository.findBySeasonAndStatusIn(season, List.of("Final", "Completed Early"));
 
         for (Game game : games) {
 
@@ -759,25 +759,15 @@ public class DataInitializer implements ApplicationRunner {
             try {
 
                 Map<String, Object> response = webClient.get()
-                        .uri("/game/" + game.getId() + "/feed/live")
+                        .uri("/game/" + game.getId() + "/playByPlay")
                         .retrieve()
                         .bodyToMono(Map.class)
                         .block();
 
                 if (response == null) continue;
 
-                Map<String, Object> liveData =
-                        (Map<String, Object>) response.get("liveData");
-
-                if (liveData == null) continue;
-
-                Map<String, Object> plays =
-                        (Map<String, Object>) liveData.get("plays");
-
-                if (plays == null) continue;
-
                 List<Map<String, Object>> allPlays =
-                        (List<Map<String, Object>>) plays.get("allPlays");
+                        (List<Map<String, Object>>) response.get("allPlays");
 
                 if (allPlays == null) continue;
 
@@ -794,7 +784,7 @@ public class DataInitializer implements ApplicationRunner {
                                 (Map<String, Object>) matchup.get("pitcher");
 
                         Map<String, Object> batterMap =
-                                (Map<String, Object>) matchup.get("batter");
+                                (Map<String, Object>) matchup.get("batter");    
 
                         if (pitcherMap == null || batterMap == null) continue;
 
@@ -854,6 +844,15 @@ public class DataInitializer implements ApplicationRunner {
                                                 pitchDataMap.get("startSpeed")
                                         );
 
+                                // 회전수 (rpm) — pitchData.breaks.spinRate
+                                Integer spinRate = null;
+                                Map<String, Object> breaksMap =
+                                        (Map<String, Object>) pitchDataMap.get("breaks");
+                                if (breaksMap != null) {
+                                    int sr = parseIntSafe(breaksMap.get("spinRate"));
+                                    if (sr > 0) spinRate = sr;
+                                }
+
                                 // 좌표
                                 Map<String, Object> coordinates =
                                         (Map<String, Object>)
@@ -882,8 +881,9 @@ public class DataInitializer implements ApplicationRunner {
                                                         .toString()
                                                 : null;
 
-                                // inning
+                                // inning + scoringPlay — play.about
                                 Integer inning = null;
+                                Boolean scoringPlay = false;
 
                                 if (play.get("about") != null) {
 
@@ -894,6 +894,11 @@ public class DataInitializer implements ApplicationRunner {
                                             parseIntSafe(
                                                     aboutMap.get("inning")
                                             );
+
+                                    Object isScoringObj = aboutMap.get("isScoringPlay");
+                                    if (isScoringObj instanceof Boolean) {
+                                        scoringPlay = (Boolean) isScoringObj;
+                                    }
                                 }
 
                                 // count
@@ -948,6 +953,7 @@ public class DataInitializer implements ApplicationRunner {
                                         .batter(batter)
                                         .pitchType(pitchType)
                                         .velocity(velocity)
+                                        .spinRate(spinRate)
                                         .plateX(plateX)
                                         .plateZ(plateZ)
                                         .result(result)
@@ -958,6 +964,7 @@ public class DataInitializer implements ApplicationRunner {
                                         .exitVelocity(launchSpeed)
                                         .launchAngle(launchAngle)
                                         .distance(totalDistance)
+                                        .scoringPlay(scoringPlay)
                                         .build();
 
                                 pitchDataRepository.save(pitchData);
@@ -1277,99 +1284,154 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     // ======================================================
-    // HotColdZone 데이터 수집
+    // HotColdZone 데이터 수집 (13존: 내부 9존 [3][3] + 외부 4존)
+    //
+    // Baseball Savant zone ID 체계:
+    //   내부 9존 — zone 1~9  → innerZones[row][col]
+    //     1→[0][0] 2→[0][1] 3→[0][2]
+    //     4→[1][0] 5→[1][1] 6→[1][2]
+    //     7→[2][0] 8→[2][1] 9→[2][2]
+    //   외부 4존 — zone 11=top 12=bottom 13=left 14=right
     // ======================================================
     @SuppressWarnings("unchecked")
     private void initHotColdZones(int season) {
-
+ 
         log.info("{} 시즌 HotColdZone 수집 시작...", season);
-
+ 
         List<Player> players = playerRepository.findAll();
-
+ 
         int saved = 0;
-
+ 
         for (Player player : players) {
-
+ 
             try {
-
+ 
                 if (hotColdZoneRepository.existsByPlayerIdAndSeason(
                         player.getId(), season)) {
                     continue;
                 }
-
+ 
                 Map<String, Object> response = webClient.get()
                         .uri("/people/" + player.getId()
                                 + "/stats?stats=hotColdZones&season=" + season)
                         .retrieve()
                         .bodyToMono(Map.class)
                         .block();
-
+ 
                 if (response == null) continue;
-
+ 
                 List<Map<String, Object>> statsList =
                         (List<Map<String, Object>>) response.get("stats");
-
+ 
                 if (statsList == null || statsList.isEmpty()) continue;
-
+ 
                 for (Map<String, Object> statGroup : statsList) {
-
+ 
                     Map<String, Object> typeMap =
                             (Map<String, Object>) statGroup.get("type");
-
-                    if (typeMap == null) continue;
-
+ 
+                    if (typeMap == null) {
+                        log.warn("HotColdZone [{}] typeMap is null, statGroup keys: {}", player.getId(), statGroup.keySet());
+                        continue;
+                    }
+ 
                     String typeName =
                             typeMap.getOrDefault("displayName", "").toString();
-
-                    if (!typeName.equals("hotColdZonesBatter")) continue;
-
+ 
+                    // 실제 API 응답 typeName 확인
+                    log.info("HotColdZone [player={}] typeName='{}' typeMap={}", player.getId(), typeName, typeMap);
+ 
+                    // 타자 핫콜드존만 처리
+                    if (!typeName.equals("hotColdZones")) continue;
+ 
                     List<Map<String, Object>> splits =
                             (List<Map<String, Object>>) statGroup.get("splits");
-
-                    if (splits == null || splits.isEmpty()) continue;
-
-                    Double[] zones = new Double[9];
-
-                    for (int i = 0; i < Math.min(splits.size(), 9); i++) {
-
-                        Map<String, Object> split = splits.get(i);
-
+ 
+                    if (splits == null || splits.isEmpty()) {
+                        log.warn("HotColdZone [player={}] splits null or empty", player.getId());
+                        continue;
+                    }
+ 
+                    // splits 첫 번째 항목 확인
+                    if (!splits.isEmpty()) {
+                        Map<String, Object> first = splits.get(0);
+                        log.info("HotColdZone [player={}] splits.size={}, first keys={}, zone={}", 
+                            player.getId(), splits.size(), first.keySet(), first.get("zone"));
+                    }
+ 
+                    // innerZones[3][3] 초기화
+                    Double[][] innerZones = new Double[3][3];
+ 
+                    // outerZones 초기화
+                    Double outerTop = null, outerBottom = null,
+                           outerLeft = null, outerRight = null;
+ 
+                    for (Map<String, Object> split : splits) {
+ 
+                        Object zoneObj = split.get("zone");
+                        if (zoneObj == null) continue;
+ 
+                        int zoneId;
+                        try {
+                            zoneId = Integer.parseInt(zoneObj.toString());
+                        } catch (NumberFormatException e) {
+                            continue;
+                        }
+ 
                         Map<String, Object> stat =
                                 (Map<String, Object>) split.get("stat");
-
-                        if (stat != null) {
-                            zones[i] = parseDoubleSafe(stat.get("avg"));
+ 
+                        if (stat == null) continue;
+ 
+                        Double avg = parseDoubleSafe(stat.get("avg"));
+ 
+                        // 내부 9존 (1~9) → [3][3]
+                        if (zoneId >= 1 && zoneId <= 9) {
+                            int idx  = zoneId - 1;   // 0~8
+                            int row  = idx / 3;       // 0,1,2
+                            int col  = idx % 3;       // 0,1,2
+                            innerZones[row][col] = avg;
+ 
+                        // 외부 4존 (11~14)
+                        } else if (zoneId == 11) {
+                            outerTop    = avg;
+                        } else if (zoneId == 12) {
+                            outerBottom = avg;
+                        } else if (zoneId == 13) {
+                            outerLeft   = avg;
+                        } else if (zoneId == 14) {
+                            outerRight  = avg;
                         }
                     }
-
+ 
+                    HotColdZone.OuterZones outerZones = HotColdZone.OuterZones.builder()
+                            .top(outerTop)
+                            .bottom(outerBottom)
+                            .left(outerLeft)
+                            .right(outerRight)
+                            .build();
+ 
                     HotColdZone zone = HotColdZone.builder()
                             .player(player)
                             .season(season)
-                            .zone1(zones[0])
-                            .zone2(zones[1])
-                            .zone3(zones[2])
-                            .zone4(zones[3])
-                            .zone5(zones[4])
-                            .zone6(zones[5])
-                            .zone7(zones[6])
-                            .zone8(zones[7])
-                            .zone9(zones[8])
+                            .innerZones(innerZones)
+                            .outerZones(outerZones)
                             .build();
-
+ 
                     hotColdZoneRepository.save(zone);
-
+ 
                     saved++;
-
-                    break;
+ 
+                    break;  // 타자 타입 1개만 저장
                 }
-
+ 
                 Thread.sleep(30);
-
+ 
             } catch (Exception e) {
                 log.error("선수 {} HotColdZone 조회 실패", player.getId(), e);
             }
         }
-
+ 
         log.info("{} 시즌 HotColdZone 수집 완료: {}건", season, saved);
     }
 
@@ -1381,7 +1443,7 @@ public class DataInitializer implements ApplicationRunner {
 
         log.info("{} 시즌 SprayData 수집 시작...", season);
 
-        List<Game> games = gameRepository.findBySeason(season);
+        List<Game> games = gameRepository.findBySeasonAndStatusIn(season, List.of("Final", "Completed Early"));
 
         int saved = 0;
 
@@ -1452,11 +1514,18 @@ public class DataInitializer implements ApplicationRunner {
 
                         if (playEvents == null || playEvents.isEmpty()) continue;
 
-                        Map<String, Object> lastEvent =
-                                playEvents.get(playEvents.size() - 1);
+                        Map<String, Object> hitData = null;
 
-                        Map<String, Object> hitData =
-                                (Map<String, Object>) lastEvent.get("hitData");
+                        for (Map<String, Object> pe : playEvents) {
+
+                            if (pe.get("hitData") != null) {
+
+                                hitData = (Map<String, Object>) pe.get("hitData");
+                                break;
+                            }
+                        }
+
+                        if (hitData == null) continue;
 
                         Double exitVelocity = null;
                         Double launchAngle = null;
@@ -1464,28 +1533,25 @@ public class DataInitializer implements ApplicationRunner {
                         Double hitCoordX = null;
                         Double hitCoordY = null;
 
-                        if (hitData != null) {
+                        exitVelocity =
+                                parseDoubleSafe(hitData.get("launchSpeed"));
 
-                            exitVelocity =
-                                    parseDoubleSafe(hitData.get("launchSpeed"));
+                        launchAngle =
+                                parseDoubleSafe(hitData.get("launchAngle"));
 
-                            launchAngle =
-                                    parseDoubleSafe(hitData.get("launchAngle"));
+                        hitDistance =
+                                parseDoubleSafe(hitData.get("totalDistance"));
 
-                            hitDistance =
-                                    parseDoubleSafe(hitData.get("totalDistance"));
+                        Map<String, Object> coordinates =
+                                (Map<String, Object>) hitData.get("coordinates");
 
-                            Map<String, Object> coordinates =
-                                    (Map<String, Object>) hitData.get("coordinates");
+                        if (coordinates != null) {
 
-                            if (coordinates != null) {
+                            hitCoordX =
+                                    parseDoubleSafe(coordinates.get("coordX"));
 
-                                hitCoordX =
-                                        parseDoubleSafe(coordinates.get("coordX"));
-
-                                hitCoordY =
-                                        parseDoubleSafe(coordinates.get("coordY"));
-                            }
+                            hitCoordY =
+                                    parseDoubleSafe(coordinates.get("coordY"));
                         }
 
                         String hitLocation = "center";
