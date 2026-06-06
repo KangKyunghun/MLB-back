@@ -14,15 +14,21 @@ public class HotColdZoneResponse {
     private Integer season;
 
     /**
-     * 내부 9구역 타율 [3][3]
+     * 내부 9구역 타율 [3][3] — battingAverage
      *
-     *  [0][0] [0][1] [0][2]   좌상 | 중상 | 우상
-     *  [1][0] [1][1] [1][2]   좌중 | 중앙 | 우중
-     *  [2][0] [2][1] [2][2]   좌하 | 중하 | 우하
+     *  [0][0~2] = zone 01~03 (상단)
+     *  [1][0~2] = zone 04~06 (중단)
+     *  [2][0~2] = zone 07~09 (하단)
      */
     private Double[][] innerZones;
 
-    /** 외부 4구역 타율 */
+    /**
+     * 내부 9구역 온도 [3][3]
+     * hot | warm | lukewarm | cool | cold
+     */
+    private String[][] innerTemps;
+
+    /** 외부 4구역 타율 + 온도 */
     private HotColdZone.OuterZones outerZones;
 
     public static HotColdZoneResponse from(HotColdZone zone) {
@@ -32,6 +38,7 @@ public class HotColdZoneResponse {
                 .playerName(zone.getPlayer().getFullName())
                 .season(zone.getSeason())
                 .innerZones(zone.getInnerZones())
+                .innerTemps(zone.getInnerTemps())
                 .outerZones(zone.getOuterZones())
                 .build();
     }

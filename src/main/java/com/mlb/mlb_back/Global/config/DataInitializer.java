@@ -10,6 +10,9 @@ import com.mlb.mlb_back.Domain.stat.entity.HotColdZone;
 import com.mlb.mlb_back.Domain.stat.entity.PitchData;
 import com.mlb.mlb_back.Domain.stat.entity.PitcherStat;
 import com.mlb.mlb_back.Domain.stat.entity.SprayData;
+import com.mlb.mlb_back.Domain.stat.entity.BatterSituationStat;
+import com.mlb.mlb_back.Domain.stat.entity.BatterVsPitcher;
+import com.mlb.mlb_back.Domain.stat.entity.PlayerMonthlyStat;
 import com.mlb.mlb_back.Domain.team.entity.Team;
 import com.mlb.mlb_back.Domain.game.repository.BoxScoreRepository;
 import com.mlb.mlb_back.Domain.game.repository.GameRepository;
@@ -21,6 +24,9 @@ import com.mlb.mlb_back.Domain.stat.repository.HotColdZoneRepository;
 import com.mlb.mlb_back.Domain.stat.repository.PitchDataRepository;
 import com.mlb.mlb_back.Domain.stat.repository.PitcherStatRepository;
 import com.mlb.mlb_back.Domain.stat.repository.SprayDataRepository;
+import com.mlb.mlb_back.Domain.stat.repository.BatterSituationStatRepository;
+import com.mlb.mlb_back.Domain.stat.repository.BatterVsPitcherRepository;
+import com.mlb.mlb_back.Domain.stat.repository.PlayerMonthlyStatRepository;
 import com.mlb.mlb_back.Domain.team.repository.TeamRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -54,6 +60,9 @@ public class DataInitializer implements ApplicationRunner {
     private final BoxScoreRepository boxScoreRepository;
     private final HotColdZoneRepository hotColdZoneRepository;
     private final SprayDataRepository sprayDataRepository;
+    private final BatterSituationStatRepository batterSituationStatRepository;
+    private final BatterVsPitcherRepository batterVsPitcherRepository;
+    private final PlayerMonthlyStatRepository playerMonthlyStatRepository;
 
     private final WebClient webClient = WebClient.builder()
         .baseUrl("https://statsapi.mlb.com/api/v1")
@@ -76,14 +85,18 @@ public class DataInitializer implements ApplicationRunner {
         initTeams();
         initPlayers();
         for (int season : SEASONS) {
-            initGames(season);
-            initStandings(season);
-            initBatterStats(season);
-            initPitcherStats(season);
-            initLineScores(season);
-            initBoxScores(season);
-            initHotColdZones(season);
-            initSprayData(season);
+            //initGames(season);
+            //initStandings(season);
+            //initBatterStats(season);
+            //initPitcherStats(season);
+            //initLineScores(season);
+            //initBoxScores(season);
+            //initHotColdZones(season);
+            //initSprayData(season);
+            //initBatterSituationStats(season);
+            //initBatterSplitStats(season);          // vl / vr (batter_situation_stat 통합)
+            //initPlayerMonthlyStats(season);
+            //initBatterVsPitcher(season);           // pitch_data 집계
             initPitchData(season);
         } 
 
@@ -775,6 +788,18 @@ public class DataInitializer implements ApplicationRunner {
 
                     try {
 
+                        // 타석 최종 결과
+                        Map<String, Object> playResult =
+                                (Map<String, Object>) play.get("result");
+
+                        String eventResult = null;
+
+                        if (playResult != null) {
+                            eventResult = playResult.get("event") != null
+                                    ? playResult.get("event").toString()
+                                    : null;
+                        }
+
                         Map<String, Object> matchup =
                                 (Map<String, Object>) play.get("matchup");
 
@@ -957,6 +982,7 @@ public class DataInitializer implements ApplicationRunner {
                                         .plateX(plateX)
                                         .plateZ(plateZ)
                                         .result(result)
+                                        .event(eventResult)
                                         .inning(inning)
                                         .balls(balls)
                                         .strikes(strikes)
@@ -1295,143 +1321,161 @@ public class DataInitializer implements ApplicationRunner {
     // ======================================================
     @SuppressWarnings("unchecked")
     private void initHotColdZones(int season) {
- 
+
         log.info("{} 시즌 HotColdZone 수집 시작...", season);
- 
+
         List<Player> players = playerRepository.findAll();
- 
+
         int saved = 0;
- 
+
         for (Player player : players) {
- 
+
             try {
- 
+
                 if (hotColdZoneRepository.existsByPlayerIdAndSeason(
                         player.getId(), season)) {
                     continue;
                 }
- 
+
                 Map<String, Object> response = webClient.get()
                         .uri("/people/" + player.getId()
                                 + "/stats?stats=hotColdZones&season=" + season)
                         .retrieve()
                         .bodyToMono(Map.class)
                         .block();
- 
+
                 if (response == null) continue;
- 
+
                 List<Map<String, Object>> statsList =
                         (List<Map<String, Object>>) response.get("stats");
- 
+
                 if (statsList == null || statsList.isEmpty()) continue;
- 
+
                 for (Map<String, Object> statGroup : statsList) {
- 
+
                     Map<String, Object> typeMap =
                             (Map<String, Object>) statGroup.get("type");
- 
-                    if (typeMap == null) {
-                        log.warn("HotColdZone [{}] typeMap is null, statGroup keys: {}", player.getId(), statGroup.keySet());
-                        continue;
-                    }
- 
+
+                    if (typeMap == null) continue;
+
                     String typeName =
                             typeMap.getOrDefault("displayName", "").toString();
- 
-                    // 실제 API 응답 typeName 확인
-                    log.info("HotColdZone [player={}] typeName='{}' typeMap={}", player.getId(), typeName, typeMap);
- 
-                    // 타자 핫콜드존만 처리
+
+                    // API가 "hotColdZones" 단일 타입으로 내려줌 (타자/투수 구분 없음)
                     if (!typeName.equals("hotColdZones")) continue;
- 
+
                     List<Map<String, Object>> splits =
                             (List<Map<String, Object>>) statGroup.get("splits");
- 
-                    if (splits == null || splits.isEmpty()) {
-                        log.warn("HotColdZone [player={}] splits null or empty", player.getId());
-                        continue;
-                    }
- 
-                    // splits 첫 번째 항목 확인
-                    if (!splits.isEmpty()) {
-                        Map<String, Object> first = splits.get(0);
-                        log.info("HotColdZone [player={}] splits.size={}, first keys={}, zone={}", 
-                            player.getId(), splits.size(), first.keySet(), first.get("zone"));
-                    }
- 
-                    // innerZones[3][3] 초기화
-                    Double[][] innerZones = new Double[3][3];
- 
+
+                    if (splits == null || splits.isEmpty()) continue;
+
+                    // innerZones[3][3] 초기화 (값, temp 각각)
+                    Double[][] innerZones   = new Double[3][3];
+                    String[][] innerTemps   = new String[3][3];
+
                     // outerZones 초기화
                     Double outerTop = null, outerBottom = null,
                            outerLeft = null, outerRight = null;
- 
+                    String outerTopTemp = null, outerBottomTemp = null,
+                           outerLeftTemp = null, outerRightTemp = null;
+
+                    // API 구조:
+                    //   splits[] = stat 종류별 배열 (battingAverage, OPS 등)
+                    //   각 split.stat.name 으로 종류 구분
+                    //   split.stat.zones[].zone = "01"~"14" 문자열
+                    //   split.stat.zones[].value = ".286" 또는 "-" (데이터 없음)
+                    //   split.stat.zones[].temp  = "hot/warm/lukewarm/cool/cold"
+                    // → battingAverage 기준으로 저장
                     for (Map<String, Object> split : splits) {
- 
-                        Object zoneObj = split.get("zone");
-                        if (zoneObj == null) continue;
- 
-                        int zoneId;
-                        try {
-                            zoneId = Integer.parseInt(zoneObj.toString());
-                        } catch (NumberFormatException e) {
-                            continue;
-                        }
- 
+
                         Map<String, Object> stat =
                                 (Map<String, Object>) split.get("stat");
- 
+
                         if (stat == null) continue;
- 
-                        Double avg = parseDoubleSafe(stat.get("avg"));
- 
-                        // 내부 9존 (1~9) → [3][3]
-                        if (zoneId >= 1 && zoneId <= 9) {
-                            int idx  = zoneId - 1;   // 0~8
-                            int row  = idx / 3;       // 0,1,2
-                            int col  = idx % 3;       // 0,1,2
-                            innerZones[row][col] = avg;
- 
-                        // 외부 4존 (11~14)
-                        } else if (zoneId == 11) {
-                            outerTop    = avg;
-                        } else if (zoneId == 12) {
-                            outerBottom = avg;
-                        } else if (zoneId == 13) {
-                            outerLeft   = avg;
-                        } else if (zoneId == 14) {
-                            outerRight  = avg;
+
+                        // battingAverage 만 사용
+                        String statName = stat.getOrDefault("name", "").toString();
+                        if (!statName.equals("battingAverage")) continue;
+
+                        List<Map<String, Object>> zones =
+                                (List<Map<String, Object>>) stat.get("zones");
+
+                        if (zones == null) continue;
+
+                        for (Map<String, Object> zoneEntry : zones) {
+
+                            Object zoneObj = zoneEntry.get("zone");
+                            if (zoneObj == null) continue;
+
+                            int zoneId;
+                            try {
+                                zoneId = Integer.parseInt(zoneObj.toString().trim());
+                            } catch (NumberFormatException e) {
+                                continue;
+                            }
+
+                            // "-" 는 데이터 없음 → null
+                            Object rawValue = zoneEntry.get("value");
+                            Double value = null;
+                            if (rawValue != null && !rawValue.toString().equals("-")) {
+                                value = parseDoubleSafe(rawValue);
+                            }
+
+                            String temp = zoneEntry.get("temp") != null
+                                    ? zoneEntry.get("temp").toString() : null;
+
+                            // 내부 9존 (01~09) → innerZones[row][col]
+                            if (zoneId >= 1 && zoneId <= 9) {
+                                int idx = zoneId - 1;
+                                int row = idx / 3;
+                                int col = idx % 3;
+                                innerZones[row][col] = value;
+                                innerTemps[row][col] = temp;
+
+                            // 외부 4존 (11~14)
+                            } else if (zoneId == 11) {
+                                outerTop     = value; outerTopTemp    = temp;
+                            } else if (zoneId == 12) {
+                                outerBottom  = value; outerBottomTemp = temp;
+                            } else if (zoneId == 13) {
+                                outerLeft    = value; outerLeftTemp   = temp;
+                            } else if (zoneId == 14) {
+                                outerRight   = value; outerRightTemp  = temp;
+                            }
                         }
+
+                        break; // battingAverage 찾으면 종료
                     }
- 
+
                     HotColdZone.OuterZones outerZones = HotColdZone.OuterZones.builder()
-                            .top(outerTop)
-                            .bottom(outerBottom)
-                            .left(outerLeft)
-                            .right(outerRight)
+                            .top(outerTop)           .topTemp(outerTopTemp)
+                            .bottom(outerBottom)     .bottomTemp(outerBottomTemp)
+                            .left(outerLeft)         .leftTemp(outerLeftTemp)
+                            .right(outerRight)       .rightTemp(outerRightTemp)
                             .build();
- 
+
                     HotColdZone zone = HotColdZone.builder()
                             .player(player)
                             .season(season)
                             .innerZones(innerZones)
+                            .innerTemps(innerTemps)
                             .outerZones(outerZones)
                             .build();
- 
+
                     hotColdZoneRepository.save(zone);
- 
+
                     saved++;
- 
+
                     break;  // 타자 타입 1개만 저장
                 }
- 
+
                 Thread.sleep(30);
- 
+
             } catch (Exception e) {
                 log.error("선수 {} HotColdZone 조회 실패", player.getId(), e);
             }
         }
- 
+
         log.info("{} 시즌 HotColdZone 수집 완료: {}건", season, saved);
     }
 
@@ -1594,6 +1638,366 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     // ================================================
+    // BatterSituationStat 데이터 수집 (득점권 타율 등 상황별 타격 스탯)
+    //
+    // API: /people/{id}/stats?stats=statSplits&season={season}&group=hitting&sitCodes={code}
+    // 현재 수집 상황 코드:
+    //   risp        — 득점권 (2루 또는 3루에 주자)
+    // (추후 bases_loaded, two_outs, late_close 등 sitCodes 배열에 추가)
+    // ================================================
+    @SuppressWarnings("unchecked")
+    private void initBatterSituationStats(int season) {
+
+        log.info("{} 시즌 BatterSituationStat 수집 시작...", season);
+
+        // 수집할 상황 코드 목록 — 추후 여기에 추가
+        List<String> sitCodes = List.of("risp");
+
+        List<Player> players = playerRepository.findAll();
+
+        int saved = 0;
+
+        for (Player player : players) {
+            for (String sitCode : sitCodes) {
+                try {
+
+                    if (batterSituationStatRepository.existsByPlayerIdAndSeasonAndSitCode(
+                            player.getId(), season, sitCode)) {
+                        continue;
+                    }
+
+                    Map<String, Object> response = webClient.get()
+                            .uri("/people/" + player.getId()
+                                    + "/stats?stats=statSplits&season=" + season
+                                    + "&group=hitting&sitCodes=" + sitCode)
+                            .retrieve()
+                            .bodyToMono(Map.class)
+                            .block();
+
+                    if (response == null) continue;
+
+                    List<Map<String, Object>> statsList =
+                            (List<Map<String, Object>>) response.get("stats");
+
+                    if (statsList == null || statsList.isEmpty()) continue;
+
+                    for (Map<String, Object> statGroup : statsList) {
+
+                        List<Map<String, Object>> splits =
+                                (List<Map<String, Object>>) statGroup.get("splits");
+
+                        if (splits == null || splits.isEmpty()) continue;
+
+                        // 첫 번째 split이 해당 시즌 전체 집계
+                        Map<String, Object> split = splits.get(0);
+
+                        Map<String, Object> stat =
+                                (Map<String, Object>) split.get("stat");
+
+                        if (stat == null) continue;
+
+                        // split.code, split.description
+                        Map<String, Object> splitInfo =
+                                (Map<String, Object>) split.get("split");
+
+                        String code = splitInfo != null
+                                ? splitInfo.getOrDefault("code", sitCode).toString()
+                                : sitCode;
+
+                        String description = splitInfo != null
+                                ? splitInfo.getOrDefault("description", "").toString()
+                                : "";
+
+                        BatterSituationStat situationStat = BatterSituationStat.builder()
+                                .player(player)
+                                .season(season)
+                                .sitCode(code)
+                                .sitDescription(description)
+                                // 비율 스탯 — "-" 또는 null이면 null 저장
+                                .avg(parseStatDouble(stat.get("avg")))
+                                .obp(parseStatDouble(stat.get("obp")))
+                                .slg(parseStatDouble(stat.get("slg")))
+                                .ops(parseStatDouble(stat.get("ops")))
+                                .babip(parseStatDouble(stat.get("babip")))
+                                // 기본 스탯
+                                .plateAppearances(parseIntSafe(stat.get("plateAppearances")))
+                                .atBats(parseIntSafe(stat.get("atBats")))
+                                .hits(parseIntSafe(stat.get("hits")))
+                                .doubles(parseIntSafe(stat.get("doubles")))
+                                .triples(parseIntSafe(stat.get("triples")))
+                                .homeRuns(parseIntSafe(stat.get("homeRuns")))
+                                .rbi(parseIntSafe(stat.get("rbi")))
+                                // 볼넷 / 삼진
+                                .strikeOuts(parseIntSafe(stat.get("strikeOuts")))
+                                .baseOnBalls(parseIntSafe(stat.get("baseOnBalls")))
+                                .intentionalWalks(parseIntSafe(stat.get("intentionalWalks")))
+                                // 기타
+                                .groundIntoDoublePlay(parseIntSafe(stat.get("groundIntoDoublePlay")))
+                                .totalBases(parseIntSafe(stat.get("totalBases")))
+                                .leftOnBase(parseIntSafe(stat.get("leftOnBase")))
+                                .gamesPlayed(parseIntSafe(stat.get("gamesPlayed")))
+                                .build();
+
+                        batterSituationStatRepository.save(situationStat);
+                        saved++;
+                    }
+
+                    Thread.sleep(30);
+
+                } catch (Exception e) {
+                    log.error("선수 {} sitCode={} BatterSituationStat 조회 실패",
+                            player.getId(), sitCode, e);
+                }
+            }
+        }
+
+        log.info("{} 시즌 BatterSituationStat 수집 완료: {}건", season, saved);
+    }
+
+    // ================================================
+    // 좌투/우투 분할 스탯 — batter_situation_stat 통합 (sitCode: vl / vr)
+    // API: /people/{id}/stats?stats=statSplits&season={s}&group=hitting&sitCodes=vl,vr
+    // ================================================
+    @SuppressWarnings("unchecked")
+    private void initBatterSplitStats(int season) {
+
+        log.info("{} 시즌 BatterSplitStat(vl/vr) 수집 시작...", season);
+
+        List<Player> players = playerRepository.findAll();
+        int saved = 0;
+
+        for (Player player : players) {
+            try {
+                // 이미 둘 다 있으면 스킵
+                boolean hasVl = batterSituationStatRepository
+                        .existsByPlayerIdAndSeasonAndSitCode(player.getId(), season, "vl");
+                boolean hasVr = batterSituationStatRepository
+                        .existsByPlayerIdAndSeasonAndSitCode(player.getId(), season, "vr");
+                if (hasVl && hasVr) continue;
+
+                Map<String, Object> response = webClient.get()
+                        .uri("/people/" + player.getId()
+                                + "/stats?stats=statSplits&season=" + season
+                                + "&group=hitting&sitCodes=vl,vr")
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .block();
+
+                if (response == null) continue;
+
+                List<Map<String, Object>> statsList =
+                        (List<Map<String, Object>>) response.get("stats");
+                if (statsList == null || statsList.isEmpty()) continue;
+
+                for (Map<String, Object> statGroup : statsList) {
+                    List<Map<String, Object>> splits =
+                            (List<Map<String, Object>>) statGroup.get("splits");
+                    if (splits == null) continue;
+
+                    for (Map<String, Object> split : splits) {
+                        Map<String, Object> splitInfo =
+                                (Map<String, Object>) split.get("split");
+                        if (splitInfo == null) continue;
+
+                        String code = splitInfo.getOrDefault("code", "").toString();
+                        String description = splitInfo.getOrDefault("description", "").toString();
+
+                        if ((!code.equals("vl") && !code.equals("vr"))
+                                || batterSituationStatRepository
+                                        .existsByPlayerIdAndSeasonAndSitCode(
+                                                player.getId(), season, code)) {
+                            continue;
+                        }
+
+                        Map<String, Object> stat = (Map<String, Object>) split.get("stat");
+                        if (stat == null) continue;
+
+                        BatterSituationStat situationStat = BatterSituationStat.builder()
+                                .player(player).season(season)
+                                .sitCode(code).sitDescription(description)
+                                .avg(parseStatDouble(stat.get("avg")))
+                                .obp(parseStatDouble(stat.get("obp")))
+                                .slg(parseStatDouble(stat.get("slg")))
+                                .ops(parseStatDouble(stat.get("ops")))
+                                .babip(parseStatDouble(stat.get("babip")))
+                                .plateAppearances(parseIntSafe(stat.get("plateAppearances")))
+                                .atBats(parseIntSafe(stat.get("atBats")))
+                                .hits(parseIntSafe(stat.get("hits")))
+                                .doubles(parseIntSafe(stat.get("doubles")))
+                                .triples(parseIntSafe(stat.get("triples")))
+                                .homeRuns(parseIntSafe(stat.get("homeRuns")))
+                                .rbi(parseIntSafe(stat.get("rbi")))
+                                .strikeOuts(parseIntSafe(stat.get("strikeOuts")))
+                                .baseOnBalls(parseIntSafe(stat.get("baseOnBalls")))
+                                .intentionalWalks(parseIntSafe(stat.get("intentionalWalks")))
+                                .groundIntoDoublePlay(parseIntSafe(stat.get("groundIntoDoublePlay")))
+                                .totalBases(parseIntSafe(stat.get("totalBases")))
+                                .leftOnBase(parseIntSafe(stat.get("leftOnBase")))
+                                .gamesPlayed(parseIntSafe(stat.get("gamesPlayed")))
+                                .build();
+
+                        batterSituationStatRepository.save(situationStat);
+                        saved++;
+                    }
+                }
+
+                Thread.sleep(30);
+
+            } catch (Exception e) {
+                log.error("선수 {} BatterSplitStat 조회 실패", player.getId(), e);
+            }
+        }
+
+        log.info("{} 시즌 BatterSplitStat 수집 완료: {}건", season, saved);
+    }
+
+    // ================================================
+    // 월별 타격 스탯
+    // API: /people/{id}/stats?stats=byMonth&season={s}&group=hitting
+    // ================================================
+    @SuppressWarnings("unchecked")
+    private void initPlayerMonthlyStats(int season) {
+
+        log.info("{} 시즌 PlayerMonthlyStat 수집 시작...", season);
+
+        List<Player> players = playerRepository.findAll();
+        int saved = 0;
+
+        for (Player player : players) {
+            try {
+                // 이미 해당 시즌 데이터가 1개라도 있으면 스킵
+                if (playerMonthlyStatRepository
+                        .findByPlayerIdAndSeasonOrderByMonth(player.getId(), season)
+                        .size() > 0) continue;
+
+                Map<String, Object> response = webClient.get()
+                        .uri("/people/" + player.getId()
+                                + "/stats?stats=byMonth&season=" + season + "&group=hitting")
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .block();
+
+                if (response == null) continue;
+
+                List<Map<String, Object>> statsList =
+                        (List<Map<String, Object>>) response.get("stats");
+                if (statsList == null || statsList.isEmpty()) continue;
+
+                for (Map<String, Object> statGroup : statsList) {
+                    List<Map<String, Object>> splits =
+                            (List<Map<String, Object>>) statGroup.get("splits");
+                    if (splits == null) continue;
+
+                    for (Map<String, Object> split : splits) {
+                        Object monthObj = split.get("month");
+                        if (monthObj == null) continue;
+
+                        Integer month = parseIntSafe(monthObj);
+                        if (playerMonthlyStatRepository
+                                .existsByPlayerIdAndSeasonAndMonth(
+                                        player.getId(), season, month)) continue;
+
+                        Map<String, Object> stat = (Map<String, Object>) split.get("stat");
+                        if (stat == null) continue;
+
+                        PlayerMonthlyStat monthlyStat = PlayerMonthlyStat.builder()
+                                .player(player).season(season).month(month)
+                                .gamesPlayed(parseIntSafe(stat.get("gamesPlayed")))
+                                .plateAppearances(parseIntSafe(stat.get("plateAppearances")))
+                                .atBats(parseIntSafe(stat.get("atBats")))
+                                .hits(parseIntSafe(stat.get("hits")))
+                                .doubles(parseIntSafe(stat.get("doubles")))
+                                .triples(parseIntSafe(stat.get("triples")))
+                                .homeRuns(parseIntSafe(stat.get("homeRuns")))
+                                .runs(parseIntSafe(stat.get("runs")))
+                                .rbi(parseIntSafe(stat.get("rbi")))
+                                .strikeOuts(parseIntSafe(stat.get("strikeOuts")))
+                                .baseOnBalls(parseIntSafe(stat.get("baseOnBalls")))
+                                .intentionalWalks(parseIntSafe(stat.get("intentionalWalks")))
+                                .stolenBases(parseIntSafe(stat.get("stolenBases")))
+                                .caughtStealing(parseIntSafe(stat.get("caughtStealing")))
+                                .groundIntoDoublePlay(parseIntSafe(stat.get("groundIntoDoublePlay")))
+                                .totalBases(parseIntSafe(stat.get("totalBases")))
+                                .leftOnBase(parseIntSafe(stat.get("leftOnBase")))
+                                .avg(parseStatDouble(stat.get("avg")))
+                                .obp(parseStatDouble(stat.get("obp")))
+                                .slg(parseStatDouble(stat.get("slg")))
+                                .ops(parseStatDouble(stat.get("ops")))
+                                .babip(parseStatDouble(stat.get("babip")))
+                                .stolenBasePercentage(parseStatDouble(stat.get("stolenBasePercentage")))
+                                .build();
+
+                        playerMonthlyStatRepository.save(monthlyStat);
+                        saved++;
+                    }
+                }
+
+                Thread.sleep(30);
+
+            } catch (Exception e) {
+                log.error("선수 {} PlayerMonthlyStat 조회 실패", player.getId(), e);
+            }
+        }
+
+        log.info("{} 시즌 PlayerMonthlyStat 수집 완료: {}건", season, saved);
+    }
+
+    // ================================================
+    // 타자 vs 투수 상대전적 — pitch_data 집계
+    // MLB API가 vsPlayer 데이터를 미제공하므로 pitch_data 테이블에서 직접 집계
+    // 최소 5구 이상 상대한 조합만 저장
+    // ================================================
+    @SuppressWarnings("unchecked")
+    private void initBatterVsPitcher(int season) {
+
+        log.info("{} 시즌 BatterVsPitcher 집계 시작...", season);
+
+        long existing = batterVsPitcherRepository.count();
+        if (existing > 0) {
+            log.info("BatterVsPitcher 이미 데이터 존재 ({}건), 스킵", existing);
+            return;
+        }
+
+        List<Object[]> rows = batterVsPitcherRepository.aggregateFromPitchData(season);
+
+        int saved = 0;
+        for (Object[] row : rows) {
+            try {
+                Long batterId   = ((Number) row[0]).longValue();
+                Long pitcherId  = ((Number) row[1]).longValue();
+                Integer total   = ((Number) row[3]).intValue();
+                Integer ab      = ((Number) row[4]).intValue();
+                Integer h       = ((Number) row[5]).intValue();
+                Integer hr      = ((Number) row[6]).intValue();
+                Integer so      = ((Number) row[7]).intValue();
+                Integer bb      = ((Number) row[8]).intValue();
+                Integer scoring = ((Number) row[9]).intValue();
+
+                Double avg = (ab > 0) ? Math.round((double) h / ab * 1000.0) / 1000.0 : null;
+
+                Player batter  = playerRepository.findById(batterId).orElse(null);
+                Player pitcher = playerRepository.findById(pitcherId).orElse(null);
+                if (batter == null || pitcher == null) continue;
+
+                BatterVsPitcher record = BatterVsPitcher.builder()
+                        .batter(batter).pitcher(pitcher).season(season)
+                        .totalPitches(total).atBats(ab).hits(h)
+                        .homeRuns(hr).strikeOuts(so).baseOnBalls(bb)
+                        .avg(avg).pitchesInScoring(scoring)
+                        .build();
+
+                batterVsPitcherRepository.save(record);
+                saved++;
+
+            } catch (Exception e) {
+                log.error("BatterVsPitcher row 처리 오류: {}", e.getMessage());
+            }
+        }
+
+        log.info("{} 시즌 BatterVsPitcher 집계 완료: {}건", season, saved);
+    }
+
+    // ================================================
     // 유틸
     // ================================================
     private Integer parseIntSafe(Object obj) {
@@ -1605,6 +2009,15 @@ public class DataInitializer implements ApplicationRunner {
     private Double parseDoubleSafe(Object obj) {
         if (obj == null) return null;
         try { return Double.parseDouble(obj.toString()); }
+        catch (Exception e) { return null; }
+    }
+
+    /** API stat 문자열 파싱 — "-" 또는 빈값이면 null */
+    private Double parseStatDouble(Object obj) {
+        if (obj == null) return null;
+        String s = obj.toString().trim();
+        if (s.isEmpty() || s.equals("-")) return null;
+        try { return Double.parseDouble(s); }
         catch (Exception e) { return null; }
     }
 }

@@ -50,6 +50,9 @@ public class PitchData {
     // 결과
     private String result;
 
+    @Column(name = "event")
+    private String event;     // 타구 결과 (예: "Single", "Double", "Home Run", "Groundout", etc.)
+
     // 타구 속도
     private Double exitVelocity;
 
