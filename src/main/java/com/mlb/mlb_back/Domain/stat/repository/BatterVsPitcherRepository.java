@@ -13,6 +13,11 @@ public interface BatterVsPitcherRepository extends JpaRepository<BatterVsPitcher
     Optional<BatterVsPitcher> findByBatterIdAndPitcherIdAndSeason(
             Long batterId, Long pitcherId, Integer season);
 
+    long countBySeasonAndGameType(Integer season, String gameType);
+
+    boolean existsByBatterIdAndPitcherIdAndSeasonAndGameType(
+            Long batterId, Long pitcherId, Integer season, String gameType);
+
     boolean existsByBatterIdAndPitcherIdAndSeason(
             Long batterId, Long pitcherId, Integer season);
 
@@ -48,5 +53,35 @@ public interface BatterVsPitcherRepository extends JpaRepository<BatterVsPitcher
         GROUP BY pd.batter_id, pd.pitcher_id
         HAVING COUNT(*) >= 5
         """, nativeQuery = true)
+    /** 정규시즌(R) 집계 */
     List<Object[]> aggregateFromPitchData(@Param("season") Integer season);
+
+    /** 포스트시즌(W/D/L/F) 집계 */
+    @Query(value = """
+        SELECT
+            pd.batter_id,
+            pd.pitcher_id,
+            :season AS season,
+            COUNT(*)                                                        AS total_pitches,
+            COUNT(*) FILTER (WHERE pd.result IN (
+                'single','double','triple','home_run',
+                'field_out','strikeout','grounded_into_double_play',
+                'pop_out','fly_out','line_out','force_out','sac_fly',
+                'sac_bunt','field_error','fielders_choice'))                AS at_bats,
+            COUNT(*) FILTER (WHERE pd.result IN (
+                'single','double','triple','home_run'))                     AS hits,
+            COUNT(*) FILTER (WHERE pd.result = 'home_run')                 AS home_runs,
+            COUNT(*) FILTER (WHERE pd.result = 'strikeout')                AS strike_outs,
+            COUNT(*) FILTER (WHERE pd.result = 'walk')                     AS base_on_balls,
+            COUNT(*) FILTER (WHERE pd.scoring_play = true)                 AS pitches_in_scoring
+        FROM pitch_data pd
+        JOIN game g ON pd.game_id = g.id
+        WHERE g.season = :season
+          AND g.game_type IN ('W','D','L','F')
+          AND pd.batter_id IS NOT NULL
+          AND pd.pitcher_id IS NOT NULL
+        GROUP BY pd.batter_id, pd.pitcher_id
+        HAVING COUNT(*) >= 3
+        """, nativeQuery = true)
+    List<Object[]> aggregatePostSeasonFromPitchData(@Param("season") Integer season);
 }

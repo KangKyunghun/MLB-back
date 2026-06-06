@@ -7,7 +7,7 @@ import lombok.*;
 
 @Entity
 @Table(name = "batter_situation_stat", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"player_id", "season", "sit_code"})
+        @UniqueConstraint(columnNames = {"player_id", "season", "sit_code", "game_type"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -34,6 +34,12 @@ public class BatterSituationStat extends BaseEntity {
      *   late_close  : 7회 이후 1점차 이내
      *   (이후 API 확인 후 추가 가능)
      */
+    /**
+     * R=정규시즌 / PS=포스트시즌전체 (와일드카드~월드시리즈 합산)
+     */
+    @Column(name = "game_type", nullable = false, length = 2)
+    private String gameType;
+
     @Column(name = "sit_code", nullable = false, length = 30)
     private String sitCode;
 

@@ -15,6 +15,9 @@ public interface BatterSituationStatRepository extends JpaRepository<BatterSitua
     Optional<BatterSituationStat> findByPlayerIdAndSeasonAndSitCode(
             Long playerId, Integer season, String sitCode);
 
+    boolean existsByPlayerIdAndSeasonAndSitCodeAndGameType(
+            Long playerId, Integer season, String sitCode, String gameType);
+
     boolean existsByPlayerIdAndSeasonAndSitCode(
             Long playerId, Integer season, String sitCode);
 

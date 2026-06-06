@@ -84,20 +84,34 @@ public class DataInitializer implements ApplicationRunner {
 
         initTeams();
         initPlayers();
+        // 포스트시즌 game_type 코드 목록 (W=와일드카드, D=디비전, L=챔피언십, F=월드시리즈)
+        List<String> postSeasonTypes = List.of("W", "D", "L", "F");
+
         for (int season : SEASONS) {
-            //initGames(season);
-            //initStandings(season);
-            //initBatterStats(season);
-            //initPitcherStats(season);
-            //initLineScores(season);
-            //initBoxScores(season);
-            //initHotColdZones(season);
-            //initSprayData(season);
-            //initBatterSituationStats(season);
-            //initBatterSplitStats(season);          // vl / vr (batter_situation_stat 통합)
-            //initPlayerMonthlyStats(season);
-            //initBatterVsPitcher(season);           // pitch_data 집계
+            // ── 경기 데이터 (정규시즌 + 포스트시즌 모두 initGames에서 game_type별 저장)
+            initGames(season);
+            initStandings(season);
+            initLineScores(season);
+            initBoxScores(season);
             initPitchData(season);
+
+            // ── 정규시즌 선수 스탯
+            initBatterStats(season, "R");
+            initPitcherStats(season, "R");
+            initHotColdZones(season, "R");
+            initSprayData(season);                          // game FK로 구분 가능
+            initBatterSituationStats(season, "R");
+            initBatterSplitStats(season, "R");
+            initPlayerMonthlyStats(season);                 // 정규시즌 전용
+            initBatterVsPitcher(season, "R");
+
+            // ── 포스트시즌 선수 스탯 (전체 합산 = "PS")
+            initBatterStats(season, "PS");
+            initPitcherStats(season, "PS");
+            initHotColdZones(season, "PS");
+            initBatterSituationStats(season, "PS");
+            initBatterSplitStats(season, "PS");
+            initBatterVsPitcher(season, "PS");
         } 
 
         log.info("===== MLB DataInitializer 완료 =====");
@@ -477,14 +491,20 @@ public class DataInitializer implements ApplicationRunner {
     // 타자 시즌 스탯 수집 
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initBatterStats(int season) {
-        long count = batterStatRepository.countBySeason(season);
+    private void initBatterStats(int season, String gameType) {
+        long count = batterStatRepository.countBySeasonAndGameType(season, gameType);
         if (count > 0) {
-            log.info("{}시즌 타자 스탯 이미 존재, 스킵", season);
+            log.info("{}시즌 타자 스탯({}) 이미 존재, 스킵", season, gameType);
             return;
         }
 
-        log.info("{}시즌 타자 스탯 수집 시작...", season);
+        log.info("{}시즌 타자 스탯({}) 수집 시작...", season, gameType);
+
+        // 정규시즌(R) vs 포스트시즌 전체(PS) API 파라미터
+        // PS는 postseason 파라미터로 전체 포스트시즌 집계를 가져옴
+        String statsParam = gameType.equals("R")
+                ? "season&group=hitting&season=" + season + "&playerPool=All"
+                : "postSeason&group=hitting&season=" + season + "&playerPool=All";
 
         int offset = 0;
         int limit = 500;
@@ -493,8 +513,7 @@ public class DataInitializer implements ApplicationRunner {
         while (true) {
             try {
                 Map<String, Object> response = webClient.get()
-                        .uri("/stats?stats=season&group=hitting&season=" + season
-                                + "&playerPool=All&limit=" + limit + "&offset=" + offset)
+                        .uri("/stats?stats=" + statsParam + "&limit=" + limit + "&offset=" + offset)
                         .retrieve()
                         .bodyToMono(Map.class)
                         .block();
@@ -523,7 +542,7 @@ public class DataInitializer implements ApplicationRunner {
                         Team team = teamRepository.findById(teamId).orElse(null);
                         if (player == null || team == null) continue;
 
-                        if (batterStatRepository.existsByPlayerIdAndSeasonAndTeamId(playerId, season, teamId)) continue;
+                        if (batterStatRepository.existsByPlayerIdAndSeasonAndTeamIdAndGameType(playerId, season, teamId, gameType)) continue;
 
                         Map<String, Object> stat = (Map<String, Object>) split.get("stat");
                         if (stat == null) continue;
@@ -532,6 +551,7 @@ public class DataInitializer implements ApplicationRunner {
                                 .player(player)
                                 .team(team)
                                 .season(season)
+                                .gameType(gameType)
                                 // 출전 기록
                                 .gamesPlayed(parseIntSafe(stat.get("gamesPlayed")))
                                 .plateAppearances(parseIntSafe(stat.get("plateAppearances")))
@@ -578,7 +598,7 @@ public class DataInitializer implements ApplicationRunner {
                         savedCount++;
 
                     } catch (Exception e) {
-                        log.warn("타자 스탯 저장 실패: {}", e.getMessage());
+                        log.warn("타자 스탯({}) 저장 실패: {}", gameType, e.getMessage());
                     }
                 }
 
@@ -593,21 +613,25 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
 
-        log.info("{}시즌 타자 스탯 수집 완료: {}건", season, savedCount);
+        log.info("{}시즌 타자 스탯({}) 수집 완료: {}건", season, gameType, savedCount);
     }
 
     // ================================================
     // 투수 시즌 스탯 수집 
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initPitcherStats(int season) {
-        long count = pitcherStatRepository.countBySeason(season);
+    private void initPitcherStats(int season, String gameType) {
+        long count = pitcherStatRepository.countBySeasonAndGameType(season, gameType);
         if (count > 0) {
-            log.info("{}시즌 투수 스탯 이미 존재, 스킵", season);
+            log.info("{}시즌 투수 스탯({}) 이미 존재, 스킵", season, gameType);
             return;
         }
 
-        log.info("{}시즌 투수 스탯 수집 시작...", season);
+        log.info("{}시즌 투수 스탯({}) 수집 시작...", season, gameType);
+
+        String statsParam = gameType.equals("R")
+                ? "season&group=pitching&season=" + season + "&playerPool=All"
+                : "postSeason&group=pitching&season=" + season + "&playerPool=All";
 
         int offset = 0;
         int limit = 500;
@@ -616,8 +640,7 @@ public class DataInitializer implements ApplicationRunner {
         while (true) {
             try {
                 Map<String, Object> response = webClient.get()
-                        .uri("/stats?stats=season&group=pitching&season=" + season
-                                + "&playerPool=All&limit=" + limit + "&offset=" + offset)
+                        .uri("/stats?stats=" + statsParam + "&limit=" + limit + "&offset=" + offset)
                         .retrieve()
                         .bodyToMono(Map.class)
                         .block();
@@ -646,7 +669,7 @@ public class DataInitializer implements ApplicationRunner {
                         Team team = teamRepository.findById(teamId).orElse(null);
                         if (player == null || team == null) continue;
 
-                        if (pitcherStatRepository.existsByPlayerIdAndSeasonAndTeamId(playerId, season, teamId)) continue;
+                        if (pitcherStatRepository.existsByPlayerIdAndSeasonAndTeamIdAndGameType(playerId, season, teamId, gameType)) continue;
 
                         Map<String, Object> stat = (Map<String, Object>) split.get("stat");
                         if (stat == null) continue;
@@ -655,6 +678,7 @@ public class DataInitializer implements ApplicationRunner {
                                 .player(player)
                                 .team(team)
                                 .season(season)
+                                .gameType(gameType)
                                 // 출전 기록
                                 .gamesPlayed(parseIntSafe(stat.get("gamesPlayed")))
                                 .gamesStarted(parseIntSafe(stat.get("gamesStarted")))
@@ -747,7 +771,7 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
 
-        log.info("{}시즌 투수 스탯 수집 완료: {}건", season, savedCount);
+        log.info("{}시즌 투수 스탯({}) 수집 완료: {}건", season, gameType, savedCount);
 
     }
 
@@ -1320,9 +1344,9 @@ public class DataInitializer implements ApplicationRunner {
     //   외부 4존 — zone 11=top 12=bottom 13=left 14=right
     // ======================================================
     @SuppressWarnings("unchecked")
-    private void initHotColdZones(int season) {
+    private void initHotColdZones(int season, String gameType) {
 
-        log.info("{} 시즌 HotColdZone 수집 시작...", season);
+        log.info("{} 시즌 HotColdZone({}) 수집 시작...", season, gameType);
 
         List<Player> players = playerRepository.findAll();
 
@@ -1332,8 +1356,8 @@ public class DataInitializer implements ApplicationRunner {
 
             try {
 
-                if (hotColdZoneRepository.existsByPlayerIdAndSeason(
-                        player.getId(), season)) {
+                if (hotColdZoneRepository.existsByPlayerIdAndSeasonAndGameType(
+                        player.getId(), season, gameType)) {
                     continue;
                 }
 
@@ -1457,6 +1481,7 @@ public class DataInitializer implements ApplicationRunner {
                     HotColdZone zone = HotColdZone.builder()
                             .player(player)
                             .season(season)
+                            .gameType(gameType)
                             .innerZones(innerZones)
                             .innerTemps(innerTemps)
                             .outerZones(outerZones)
@@ -1476,7 +1501,7 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
 
-        log.info("{} 시즌 HotColdZone 수집 완료: {}건", season, saved);
+        log.info("{} 시즌 HotColdZone({}) 수집 완료: {}건", season, gameType, saved);
     }
 
     // ======================================================
@@ -1646,7 +1671,7 @@ public class DataInitializer implements ApplicationRunner {
     // (추후 bases_loaded, two_outs, late_close 등 sitCodes 배열에 추가)
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initBatterSituationStats(int season) {
+    private void initBatterSituationStats(int season, String gameType) {
 
         log.info("{} 시즌 BatterSituationStat 수집 시작...", season);
 
@@ -1661,14 +1686,16 @@ public class DataInitializer implements ApplicationRunner {
             for (String sitCode : sitCodes) {
                 try {
 
-                    if (batterSituationStatRepository.existsByPlayerIdAndSeasonAndSitCode(
-                            player.getId(), season, sitCode)) {
+                    if (batterSituationStatRepository.existsByPlayerIdAndSeasonAndSitCodeAndGameType(
+                            player.getId(), season, sitCode, gameType)) {
                         continue;
                     }
 
+                    // 포스트시즌(PS)은 postSeason 파라미터 사용
+                    String statsType = gameType.equals("R") ? "statSplits" : "statSplitsPostSeason";
                     Map<String, Object> response = webClient.get()
                             .uri("/people/" + player.getId()
-                                    + "/stats?stats=statSplits&season=" + season
+                                    + "/stats?stats=" + statsType + "&season=" + season
                                     + "&group=hitting&sitCodes=" + sitCode)
                             .retrieve()
                             .bodyToMono(Map.class)
@@ -1711,6 +1738,7 @@ public class DataInitializer implements ApplicationRunner {
                         BatterSituationStat situationStat = BatterSituationStat.builder()
                                 .player(player)
                                 .season(season)
+                                .gameType(gameType)
                                 .sitCode(code)
                                 .sitDescription(description)
                                 // 비율 스탯 — "-" 또는 null이면 null 저장
@@ -1751,7 +1779,7 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
 
-        log.info("{} 시즌 BatterSituationStat 수집 완료: {}건", season, saved);
+        log.info("{} 시즌 BatterSituationStat({}) 수집 완료: {}건", season, gameType, saved);
     }
 
     // ================================================
@@ -1759,7 +1787,7 @@ public class DataInitializer implements ApplicationRunner {
     // API: /people/{id}/stats?stats=statSplits&season={s}&group=hitting&sitCodes=vl,vr
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initBatterSplitStats(int season) {
+    private void initBatterSplitStats(int season, String gameType) {
 
         log.info("{} 시즌 BatterSplitStat(vl/vr) 수집 시작...", season);
 
@@ -1770,14 +1798,15 @@ public class DataInitializer implements ApplicationRunner {
             try {
                 // 이미 둘 다 있으면 스킵
                 boolean hasVl = batterSituationStatRepository
-                        .existsByPlayerIdAndSeasonAndSitCode(player.getId(), season, "vl");
+                        .existsByPlayerIdAndSeasonAndSitCodeAndGameType(player.getId(), season, "vl", gameType);
                 boolean hasVr = batterSituationStatRepository
-                        .existsByPlayerIdAndSeasonAndSitCode(player.getId(), season, "vr");
+                        .existsByPlayerIdAndSeasonAndSitCodeAndGameType(player.getId(), season, "vr", gameType);
                 if (hasVl && hasVr) continue;
 
+                String statsType = gameType.equals("R") ? "statSplits" : "statSplitsPostSeason";
                 Map<String, Object> response = webClient.get()
                         .uri("/people/" + player.getId()
-                                + "/stats?stats=statSplits&season=" + season
+                                + "/stats?stats=" + statsType + "&season=" + season
                                 + "&group=hitting&sitCodes=vl,vr")
                         .retrieve()
                         .bodyToMono(Map.class)
@@ -1804,8 +1833,8 @@ public class DataInitializer implements ApplicationRunner {
 
                         if ((!code.equals("vl") && !code.equals("vr"))
                                 || batterSituationStatRepository
-                                        .existsByPlayerIdAndSeasonAndSitCode(
-                                                player.getId(), season, code)) {
+                                        .existsByPlayerIdAndSeasonAndSitCodeAndGameType(
+                                                player.getId(), season, code, gameType)) {
                             continue;
                         }
 
@@ -1814,6 +1843,7 @@ public class DataInitializer implements ApplicationRunner {
 
                         BatterSituationStat situationStat = BatterSituationStat.builder()
                                 .player(player).season(season)
+                                .gameType(gameType)
                                 .sitCode(code).sitDescription(description)
                                 .avg(parseStatDouble(stat.get("avg")))
                                 .obp(parseStatDouble(stat.get("obp")))
@@ -1848,7 +1878,7 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
 
-        log.info("{} 시즌 BatterSplitStat 수집 완료: {}건", season, saved);
+        log.info("{} 시즌 BatterSplitStat({}) 수집 완료: {}건", season, gameType, saved);
     }
 
     // ================================================
@@ -1948,17 +1978,20 @@ public class DataInitializer implements ApplicationRunner {
     // 최소 5구 이상 상대한 조합만 저장
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initBatterVsPitcher(int season) {
+    private void initBatterVsPitcher(int season, String gameType) {
 
         log.info("{} 시즌 BatterVsPitcher 집계 시작...", season);
 
-        long existing = batterVsPitcherRepository.count();
+        long existing = batterVsPitcherRepository
+                .countBySeasonAndGameType(season, gameType);
         if (existing > 0) {
-            log.info("BatterVsPitcher 이미 데이터 존재 ({}건), 스킵", existing);
+            log.info("BatterVsPitcher({}) 이미 데이터 존재 ({}건), 스킵", gameType, existing);
             return;
         }
 
-        List<Object[]> rows = batterVsPitcherRepository.aggregateFromPitchData(season);
+        List<Object[]> rows = gameType.equals("R")
+                ? batterVsPitcherRepository.aggregateFromPitchData(season)
+                : batterVsPitcherRepository.aggregatePostSeasonFromPitchData(season);
 
         int saved = 0;
         for (Object[] row : rows) {
@@ -1981,6 +2014,7 @@ public class DataInitializer implements ApplicationRunner {
 
                 BatterVsPitcher record = BatterVsPitcher.builder()
                         .batter(batter).pitcher(pitcher).season(season)
+                        .gameType(gameType)
                         .totalPitches(total).atBats(ab).hits(h)
                         .homeRuns(hr).strikeOuts(so).baseOnBalls(bb)
                         .avg(avg).pitchesInScoring(scoring)
@@ -1994,7 +2028,7 @@ public class DataInitializer implements ApplicationRunner {
             }
         }
 
-        log.info("{} 시즌 BatterVsPitcher 집계 완료: {}건", season, saved);
+        log.info("{} 시즌 BatterVsPitcher({}) 집계 완료: {}건", season, gameType, saved);
     }
 
     // ================================================

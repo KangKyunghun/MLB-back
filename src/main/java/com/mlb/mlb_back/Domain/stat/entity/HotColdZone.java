@@ -9,7 +9,7 @@ import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "hot_cold_zone", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"player_id", "season"})
+        @UniqueConstraint(columnNames = {"player_id", "season", "game_type"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -27,6 +27,12 @@ public class HotColdZone extends BaseEntity {
 
     @Column(nullable = false)
     private Integer season;
+
+    /**
+     * R=정규시즌 / PS=포스트시즌전체 (W+D+L+F 합산)
+     */
+    @Column(name = "game_type", nullable = false, length = 2)
+    private String gameType;
 
     /**
      * 스트라이크존 내부 9구역 타율 [3][3] (battingAverage 기준)

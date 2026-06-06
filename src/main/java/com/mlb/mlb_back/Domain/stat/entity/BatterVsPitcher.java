@@ -20,7 +20,7 @@ import lombok.*;
  */
 @Entity
 @Table(name = "batter_vs_pitcher", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"batter_id", "pitcher_id", "season"})
+        @UniqueConstraint(columnNames = {"batter_id", "pitcher_id", "season", "game_type"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -42,6 +42,12 @@ public class BatterVsPitcher extends BaseEntity {
 
     @Column(nullable = false)
     private Integer season;
+
+    /**
+     * R=정규시즌 / PS=포스트시즌전체
+     */
+    @Column(name = "game_type", nullable = false, length = 2)
+    private String gameType;
 
     /** 총 투구 수 (상대한 전체 투구) */
     @Column(name = "total_pitches")

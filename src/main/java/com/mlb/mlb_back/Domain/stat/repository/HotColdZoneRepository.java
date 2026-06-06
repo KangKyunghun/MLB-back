@@ -13,6 +13,8 @@ public interface HotColdZoneRepository extends JpaRepository<HotColdZone, Long> 
 
     boolean existsByPlayerIdAndSeason(Long playerId, Integer season);
 
+    boolean existsByPlayerIdAndSeasonAndGameType(Long playerId, Integer season, String gameType);
+
     long countBySeason(Integer season);
 
 }

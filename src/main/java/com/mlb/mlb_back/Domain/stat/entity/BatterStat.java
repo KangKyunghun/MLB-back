@@ -8,7 +8,7 @@ import lombok.*;
 
 @Entity
 @Table(name = "batter_stat", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"player_id", "season", "team_id"})
+        @UniqueConstraint(columnNames = {"player_id", "season", "team_id", "game_type"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -30,6 +30,13 @@ public class BatterStat extends BaseEntity {
 
     @Column(nullable = false)
     private Integer season;                         // 시즌 연도
+
+    /**
+     * 게임 타입 코드 (MLB Stats API gameType)
+     *   R = 정규시즌, W = 와일드카드, D = 디비전시리즈, L = 챔피언십시리즈, F = 월드시리즈
+     */
+    @Column(name = "game_type", nullable = false, length = 2)
+    private String gameType;
 
     // ================================================
     // 출전 기록
