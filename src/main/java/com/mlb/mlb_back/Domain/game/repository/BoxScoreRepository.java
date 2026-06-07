@@ -23,6 +23,15 @@ public interface BoxScoreRepository extends JpaRepository<BoxScore, Long> {
     """)
     boolean existsByGameId(@Param("gameId") Long gameId);
 
+    @Query("""
+        SELECT CASE WHEN COUNT(bs) > 0 THEN true ELSE false END
+        FROM BoxScore bs WHERE bs.game.id = :gameId AND bs.player.id = :playerId AND bs.playerType = :playerType
+    """)
+    boolean existsByGameIdAndPlayerIdAndPlayerType(
+            @Param("gameId") Long gameId,
+            @Param("playerId") Long playerId,
+            @Param("playerType") String playerType);
+
     @Query("SELECT COUNT(bs) FROM BoxScore bs WHERE bs.game.season = :season")
     long countByGameSeason(@Param("season") int season);
 

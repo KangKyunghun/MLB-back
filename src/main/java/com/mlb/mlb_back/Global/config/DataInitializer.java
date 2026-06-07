@@ -76,7 +76,7 @@ public class DataInitializer implements ApplicationRunner {
         )
         .build();
 
-    private static final List<Integer> SEASONS = List.of(2024, 2025, 2026);
+    private static final List<Integer> SEASONS = List.of(2026); // 2024, 2025 시즌 데이터 수집 완료
 
     @Override
     public void run(ApplicationArguments args) {
@@ -84,7 +84,7 @@ public class DataInitializer implements ApplicationRunner {
 
         initTeams();
         initPlayers();
-        // 포스트시즌 game_type 코드 목록 (W=와일드카드, D=디비전, L=챔피언십, F=월드시리즈)
+        // 포스트시즌 game_type 코드 목록 (W=월드시리즈, D=디비전, L=챔피언십, F=와일드카드)
         List<String> postSeasonTypes = List.of("W", "D", "L", "F");
 
         for (int season : SEASONS) {
@@ -105,15 +105,16 @@ public class DataInitializer implements ApplicationRunner {
             initPlayerMonthlyStats(season);                 // 정규시즌 전용
             initBatterVsPitcher(season, "R");
 
-            // ── 포스트시즌 선수 스탯 (전체 합산 = "PS")
-            initBatterStats(season, "PS");
-            initPitcherStats(season, "PS");
-            initHotColdZones(season, "PS");
-            initBatterSituationStats(season, "PS");
-            initBatterSplitStats(season, "PS");
-            initBatterVsPitcher(season, "PS");
+            // 포스트시즌은 시리즈 별로 구현하기
+            for (String psType : postSeasonTypes) {
+                initBatterStats(season, psType);
+                initPitcherStats(season, psType);
+                initHotColdZones(season, psType);
+                initBatterSituationStats(season, psType);
+                initBatterSplitStats(season, psType);
+                initBatterVsPitcher(season, psType);
+            }
         } 
-
         log.info("===== MLB DataInitializer 완료 =====");
     }
 
@@ -129,11 +130,7 @@ public class DataInitializer implements ApplicationRunner {
 
         log.info("팀 데이터 수집 시작...");
 
-        Map<String, Object> response = webClient.get()
-                .uri("/teams?sportId=1&activeStatus=Y")
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
+        Map<String, Object> response = fetchJson("/teams?sportId=1&activeStatus=Y");
 
         if (response == null) return;
 
@@ -189,11 +186,8 @@ public class DataInitializer implements ApplicationRunner {
 
         for (Team team : teams) {
             try {
-                Map<String, Object> response = webClient.get()
-                        .uri("/teams/" + team.getId() + "/roster?rosterType=fullRoster&season=2025")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson(
+                        "/teams/" + team.getId() + "/roster?rosterType=fullRoster&season=2025");
 
                 if (response == null) continue;
 
@@ -210,11 +204,7 @@ public class DataInitializer implements ApplicationRunner {
                         if (playerRepository.existsById(playerId)) continue;
 
                         // 선수 상세 정보 조회
-                        Map<String, Object> detailResponse = webClient.get()
-                                .uri("/people/" + playerId)
-                                .retrieve()
-                                .bodyToMono(Map.class)
-                                .block();
+                        Map<String, Object> detailResponse = fetchJson("/people/" + playerId);
 
                         String firstName = "", lastName = "", fullName = "";
                         String batSide = "", pitchHand = "", nationality = "";
@@ -289,11 +279,7 @@ public class DataInitializer implements ApplicationRunner {
         long existingCount = gameRepository.countBySeason(season);
         log.info("{} 시즌 경기 데이터 수집 시작... (기존 {}개)", season, existingCount);
 
-        Map<String, Object> response = webClient.get()
-                .uri("/schedule?sportId=1&season=" + season)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
+        Map<String, Object> response = fetchJson("/schedule?sportId=1&season=" + season);
 
         if (response == null) return;
 
@@ -402,11 +388,8 @@ public class DataInitializer implements ApplicationRunner {
         // AL(103) + NL(104) 둘 다 조회
         for (int leagueId : List.of(103, 104)) {
             try {
-                Map<String, Object> response = webClient.get()
-                        .uri("/standings?leagueId=" + leagueId + "&season=" + season + "&standingsTypes=regularSeason")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson(
+                        "/standings?leagueId=" + leagueId + "&season=" + season + "&standingsTypes=regularSeason");
 
                 if (response == null) continue;
 
@@ -502,9 +485,7 @@ public class DataInitializer implements ApplicationRunner {
 
         // 정규시즌(R) vs 포스트시즌 전체(PS) API 파라미터
         // PS는 postseason 파라미터로 전체 포스트시즌 집계를 가져옴
-        String statsParam = gameType.equals("R")
-                ? "season&group=hitting&season=" + season + "&playerPool=All"
-                : "postSeason&group=hitting&season=" + season + "&playerPool=All";
+       String statsParam = "season&group=hitting&season=" + season + "&gameType=" + gameType + "&playerPool=All";
 
         int offset = 0;
         int limit = 500;
@@ -512,11 +493,8 @@ public class DataInitializer implements ApplicationRunner {
 
         while (true) {
             try {
-                Map<String, Object> response = webClient.get()
-                        .uri("/stats?stats=" + statsParam + "&limit=" + limit + "&offset=" + offset)
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson(
+                        "/stats?stats=" + statsParam + "&limit=" + limit + "&offset=" + offset);
 
                 if (response == null) break;
 
@@ -629,9 +607,7 @@ public class DataInitializer implements ApplicationRunner {
 
         log.info("{}시즌 투수 스탯({}) 수집 시작...", season, gameType);
 
-        String statsParam = gameType.equals("R")
-                ? "season&group=pitching&season=" + season + "&playerPool=All"
-                : "postSeason&group=pitching&season=" + season + "&playerPool=All";
+        String statsParam = "season&group=pitching&season=" + season + "&gameType=" + gameType + "&playerPool=All";
 
         int offset = 0;
         int limit = 500;
@@ -639,11 +615,8 @@ public class DataInitializer implements ApplicationRunner {
 
         while (true) {
             try {
-                Map<String, Object> response = webClient.get()
-                        .uri("/stats?stats=" + statsParam + "&limit=" + limit + "&offset=" + offset)
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson(
+                        "/stats?stats=" + statsParam + "&limit=" + limit + "&offset=" + offset);
 
                 if (response == null) break;
 
@@ -795,11 +768,7 @@ public class DataInitializer implements ApplicationRunner {
 
             try {
 
-                Map<String, Object> response = webClient.get()
-                        .uri("/game/" + game.getId() + "/playByPlay")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson("/game/" + game.getId() + "/playByPlay");
 
                 if (response == null) continue;
 
@@ -1081,11 +1050,7 @@ public class DataInitializer implements ApplicationRunner {
 
             try {
 
-                Map<String, Object> response = webClient.get()
-                        .uri("/game/" + game.getId() + "/linescore")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson("/game/" + game.getId() + "/linescore");
 
                 if (response == null) {
                     log.warn("게임 {} LineScore 응답이 null입니다.", game.getId());
@@ -1176,18 +1141,9 @@ public class DataInitializer implements ApplicationRunner {
 
         for (Game game : games) {
 
-            if (boxScoreRepository.existsByGameId(game.getId())) {
-                log.info("게임 {}에 이미 BoxScore가 존재합니다. 건너뜁니다.", game.getId());
-                continue;
-            }
-
             try {
 
-                Map<String, Object> response = webClient.get()
-                        .uri("/game/" + game.getId() + "/boxscore")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson("/game/" + game.getId() + "/boxscore");
 
                 if (response == null) continue;
 
@@ -1263,11 +1219,10 @@ public class DataInitializer implements ApplicationRunner {
                                             parseIntSafe(orderStr.substring(0, 1));
                                 }
 
+                                if (boxScoreRepository.existsByGameIdAndPlayerIdAndPlayerType(
+                                        game.getId(), player.getId(), "BATTER")) continue;
+
                                 BoxScore boxScore = BoxScore.builder()
-                                        .game(game)
-                                        .player(player)
-                                        .team(team)
-                                        .playerType("BATTER")
                                         .atBats(parseIntSafe(batting.get("atBats")))
                                         .hits(parseIntSafe(batting.get("hits")))
                                         .homeRuns(parseIntSafe(batting.get("homeRuns")))
@@ -1295,6 +1250,9 @@ public class DataInitializer implements ApplicationRunner {
                                     ip = parseDoubleSafe(
                                             pitching.get("inningsPitched"));
                                 }
+
+                                if (boxScoreRepository.existsByGameIdAndPlayerIdAndPlayerType(
+                                        game.getId(), player.getId(), "PITCHER")) continue;
 
                                 BoxScore boxScore = BoxScore.builder()
                                         .game(game)
@@ -1361,12 +1319,10 @@ public class DataInitializer implements ApplicationRunner {
                     continue;
                 }
 
-                Map<String, Object> response = webClient.get()
-                        .uri("/people/" + player.getId()
-                                + "/stats?stats=hotColdZones&season=" + season)
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson(
+                        "/people/" + player.getId()
+                                + "/stats?stats=hotColdZones&season=" + season
+                                + "&gameType=" + gameType);
 
                 if (response == null) continue;
 
@@ -1526,11 +1482,7 @@ public class DataInitializer implements ApplicationRunner {
 
             try {
 
-                Map<String, Object> response = webClient.get()
-                        .uri("/game/" + game.getId() + "/playByPlay")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson("/game/" + game.getId() + "/playByPlay");
 
                 if (response == null) continue;
 
@@ -1691,15 +1643,11 @@ public class DataInitializer implements ApplicationRunner {
                         continue;
                     }
 
-                    // 포스트시즌(PS)은 postSeason 파라미터 사용
-                    String statsType = gameType.equals("R") ? "statSplits" : "statSplitsPostSeason";
-                    Map<String, Object> response = webClient.get()
-                            .uri("/people/" + player.getId()
+                    String statsType = "statSplits";
+                    Map<String, Object> response = fetchJson(
+                            "/people/" + player.getId()
                                     + "/stats?stats=" + statsType + "&season=" + season
-                                    + "&group=hitting&sitCodes=" + sitCode)
-                            .retrieve()
-                            .bodyToMono(Map.class)
-                            .block();
+                                    + "&group=hitting&sitCodes=" + sitCode + "&gameType=" + gameType);
 
                     if (response == null) continue;
 
@@ -1803,14 +1751,11 @@ public class DataInitializer implements ApplicationRunner {
                         .existsByPlayerIdAndSeasonAndSitCodeAndGameType(player.getId(), season, "vr", gameType);
                 if (hasVl && hasVr) continue;
 
-                String statsType = gameType.equals("R") ? "statSplits" : "statSplitsPostSeason";
-                Map<String, Object> response = webClient.get()
-                        .uri("/people/" + player.getId()
+                String statsType = "statSplits";
+                Map<String, Object> response = fetchJson(
+                        "/people/" + player.getId()
                                 + "/stats?stats=" + statsType + "&season=" + season
-                                + "&group=hitting&sitCodes=vl,vr")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                                + "&group=hitting&sitCodes=vl,vr&gameType=" + gameType);
 
                 if (response == null) continue;
 
@@ -1900,12 +1845,9 @@ public class DataInitializer implements ApplicationRunner {
                         .findByPlayerIdAndSeasonOrderByMonth(player.getId(), season)
                         .size() > 0) continue;
 
-                Map<String, Object> response = webClient.get()
-                        .uri("/people/" + player.getId()
-                                + "/stats?stats=byMonth&season=" + season + "&group=hitting")
-                        .retrieve()
-                        .bodyToMono(Map.class)
-                        .block();
+                Map<String, Object> response = fetchJson(
+                        "/people/" + player.getId()
+                                + "/stats?stats=byMonth&season=" + season + "&group=hitting");
 
                 if (response == null) continue;
 
@@ -1989,10 +1931,7 @@ public class DataInitializer implements ApplicationRunner {
             return;
         }
 
-        List<Object[]> rows = gameType.equals("R")
-                ? batterVsPitcherRepository.aggregateFromPitchData(season)
-                : batterVsPitcherRepository.aggregatePostSeasonFromPitchData(season);
-
+        List<Object[]> rows = batterVsPitcherRepository.aggregateByGameType(season, gameType);
         int saved = 0;
         for (Object[] row : rows) {
             try {
@@ -2034,6 +1973,29 @@ public class DataInitializer implements ApplicationRunner {
     // ================================================
     // 유틸
     // ================================================
+
+    /**
+     * WebClient GET 공통 헬퍼.
+     * 4xx/5xx 포함 모든 에러를 삼키고 null 반환 → 호출부에서 null 체크만 하면 됨.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchJson(String uri) {
+        try {
+            return webClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .onErrorResume(e -> {
+                        log.warn("[API 스킵] {} → {}", uri, e.getMessage());
+                        return reactor.core.publisher.Mono.empty();
+                    })
+                    .block();
+        } catch (Exception e) {
+            log.warn("[API 스킵] {} → {}", uri, e.getMessage());
+            return null;
+        }
+    }
+
     private Integer parseIntSafe(Object obj) {
         if (obj == null) return 0;
         try { return Integer.parseInt(obj.toString()); }

@@ -18,7 +18,15 @@ public interface PitcherStatRepository extends JpaRepository<PitcherStat, Long> 
 
     List<PitcherStat> findBySeason(Integer season);
 
+    List<PitcherStat> findBySeasonAndGameType(Integer season, String gameType);  // 추가
+
     List<PitcherStat> findByPlayerId(Long playerId);
 
+    List<PitcherStat> findByPlayerIdAndGameType(Long playerId, String gameType);  // 추가
+
+    List<PitcherStat> findByPlayerIdAndSeasonAndGameType(Long playerId, Integer season, String gameType);  // 추가
+
     List<PitcherStat> findByTeamIdAndSeason(Long teamId, Integer season);
+
+    List<PitcherStat> findByTeamIdAndSeasonAndGameType(Long teamId, Integer season, String gameType);  // 추가
 }

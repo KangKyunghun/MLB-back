@@ -18,7 +18,15 @@ public interface BatterStatRepository extends JpaRepository<BatterStat, Long> {
 
     List<BatterStat> findBySeason(Integer season);
 
+    List<BatterStat> findBySeasonAndGameType(Integer season, String gameType);  // 추가
+
     List<BatterStat> findByPlayerId(Long playerId);
 
+    List<BatterStat> findByPlayerIdAndGameType(Long playerId, String gameType);  // 추가
+
+    List<BatterStat> findByPlayerIdAndSeasonAndGameType(Long playerId, Integer season, String gameType);  // 추가
+
     List<BatterStat> findByTeamIdAndSeason(Long teamId, Integer season);
+
+    List<BatterStat> findByTeamIdAndSeasonAndGameType(Long teamId, Integer season, String gameType);  // 추가
 }

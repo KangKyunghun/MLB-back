@@ -25,31 +25,34 @@ public class StatService {
 
     // ── 타자 스탯 ─────────────────────────────────────────────
 
-    // 특정 선수 타자 스탯 전체 (시즌별)
-    public List<BatterStatResponse> getBatterStats(Long playerId) {
-        return batterStatRepository.findByPlayerId(playerId)
-                .stream()
+    // 특정 선수 타자 스탯 전체 (시즌별, gameType별)
+    // gameType 없으면 전체, 있으면 필터
+    public List<BatterStatResponse> getBatterStats(Long playerId, String gameType) {
+        List<BatterStat> stats = (gameType != null)
+                ? batterStatRepository.findByPlayerIdAndGameType(playerId, gameType)
+                : batterStatRepository.findByPlayerId(playerId);
+        return stats.stream()
                 .sorted(Comparator.comparing(s -> -s.getSeason()))
                 .map(BatterStatResponse::from)
                 .collect(Collectors.toList());
     }
 
     // 특정 선수 특정 시즌 타자 스탯
-    public BatterStatResponse getBatterStatBySeason(Long playerId, Integer season) {
-        return batterStatRepository.findByPlayerId(playerId)
+    public BatterStatResponse getBatterStatBySeason(Long playerId, Integer season, String gameType) {
+        return batterStatRepository.findByPlayerIdAndSeasonAndGameType(playerId, season, gameType)
                 .stream()
-                .filter(s -> s.getSeason().equals(season))
                 .findFirst()
                 .map(BatterStatResponse::from)
                 .orElseThrow(() -> ApiException.notFound(
-                        "타자 스탯을 찾을 수 없습니다: playerId=" + playerId + ", season=" + season));
+                        "타자 스탯을 찾을 수 없습니다: playerId=" + playerId + ", season=" + season + ", gameType=" + gameType));
     }
 
     // 시즌 타자 리더보드
-    public List<BatterStatResponse> getBatterLeaderboard(Integer season, String statType, int limit) {
-        return batterStatRepository.findBySeason(season)
+    public List<BatterStatResponse> getBatterLeaderboard(Integer season, String gameType, String statType, int limit) {
+        int minAtBats = gameType.equals("R") ? 100 : 10; // 포스트시즌은 최소 타수 기준 완화
+        return batterStatRepository.findBySeasonAndGameType(season, gameType)
                 .stream()
-                .filter(s -> s.getAtBats() != null && s.getAtBats() >= 100) // 최소 타수 기준
+                .filter(s -> s.getAtBats() != null && s.getAtBats() >= minAtBats)
                 .sorted(getBatterLeaderboardComparator(statType))
                 .limit(limit)
                 .map(BatterStatResponse::from)
@@ -57,8 +60,8 @@ public class StatService {
     }
 
     // 팀별 타자 스탯
-    public List<BatterStatResponse> getBatterStatsByTeam(Long teamId, Integer season) {
-        return batterStatRepository.findByTeamIdAndSeason(teamId, season)
+    public List<BatterStatResponse> getBatterStatsByTeam(Long teamId, Integer season, String gameType) {
+        return batterStatRepository.findByTeamIdAndSeasonAndGameType(teamId, season, gameType)
                 .stream()
                 .map(BatterStatResponse::from)
                 .collect(Collectors.toList());
@@ -100,31 +103,33 @@ public class StatService {
 
     // ── 투수 스탯 ─────────────────────────────────────────────
 
-    // 특정 선수 투수 스탯 전체 (시즌별)
-    public List<PitcherStatResponse> getPitcherStats(Long playerId) {
-        return pitcherStatRepository.findByPlayerId(playerId)
-                .stream()
+    // 특정 선수 투수 스탯 전체 (시즌별, gameType별)
+    public List<PitcherStatResponse> getPitcherStats(Long playerId, String gameType) {
+        List<PitcherStat> stats = (gameType != null)
+                ? pitcherStatRepository.findByPlayerIdAndGameType(playerId, gameType)
+                : pitcherStatRepository.findByPlayerId(playerId);
+        return stats.stream()
                 .sorted(Comparator.comparing(s -> -s.getSeason()))
                 .map(PitcherStatResponse::from)
                 .collect(Collectors.toList());
     }
 
     // 특정 선수 특정 시즌 투수 스탯
-    public PitcherStatResponse getPitcherStatBySeason(Long playerId, Integer season) {
-        return pitcherStatRepository.findByPlayerId(playerId)
+    public PitcherStatResponse getPitcherStatBySeason(Long playerId, Integer season, String gameType) {
+        return pitcherStatRepository.findByPlayerIdAndSeasonAndGameType(playerId, season, gameType)
                 .stream()
-                .filter(s -> s.getSeason().equals(season))
                 .findFirst()
                 .map(PitcherStatResponse::from)
                 .orElseThrow(() -> ApiException.notFound(
-                        "투수 스탯을 찾을 수 없습니다: playerId=" + playerId + ", season=" + season));
+                        "투수 스탯을 찾을 수 없습니다: playerId=" + playerId + ", season=" + season + ", gameType=" + gameType));
     }
 
     // 시즌 투수 리더보드
-    public List<PitcherStatResponse> getPitcherLeaderboard(Integer season, String statType, int limit) {
-        return pitcherStatRepository.findBySeason(season)
+    public List<PitcherStatResponse> getPitcherLeaderboard(Integer season, String gameType, String statType, int limit) {
+        double minInnings = gameType.equals("R") ? 20.0 : 5.0; // 포스트시즌은 최소 이닝 기준 완화
+        return pitcherStatRepository.findBySeasonAndGameType(season, gameType)
                 .stream()
-                .filter(s -> s.getInningsPitched() != null && s.getInningsPitched() >= 20) // 최소 이닝 기준
+                .filter(s -> s.getInningsPitched() != null && s.getInningsPitched() >= minInnings)
                 .sorted(getPitcherLeaderboardComparator(statType))
                 .limit(limit)
                 .map(PitcherStatResponse::from)
@@ -132,8 +137,8 @@ public class StatService {
     }
 
     // 팀별 투수 스탯
-    public List<PitcherStatResponse> getPitcherStatsByTeam(Long teamId, Integer season) {
-        return pitcherStatRepository.findByTeamIdAndSeason(teamId, season)
+    public List<PitcherStatResponse> getPitcherStatsByTeam(Long teamId, Integer season, String gameType) {
+        return pitcherStatRepository.findByTeamIdAndSeasonAndGameType(teamId, season, gameType)
                 .stream()
                 .map(PitcherStatResponse::from)
                 .collect(Collectors.toList());
