@@ -76,7 +76,7 @@ public class DataInitializer implements ApplicationRunner {
         )
         .build();
 
-    private static final List<Integer> SEASONS = List.of(2026); // 2024, 2025 시즌 데이터 수집 완료
+    private static final List<Integer> SEASONS = List.of(2024, 2025, 2026); // 2024, 2025 시즌 데이터 수집 완료 , 채팅방 유지를 위한 3개 시즌 다시 수집
 
     @Override
     public void run(ApplicationArguments args) {
@@ -1223,6 +1223,10 @@ public class DataInitializer implements ApplicationRunner {
                                         game.getId(), player.getId(), "BATTER")) continue;
 
                                 BoxScore boxScore = BoxScore.builder()
+                                        .game(game)
+                                        .player(player)
+                                        .team(team)
+                                        .playerType("BATTER")
                                         .atBats(parseIntSafe(batting.get("atBats")))
                                         .hits(parseIntSafe(batting.get("hits")))
                                         .homeRuns(parseIntSafe(batting.get("homeRuns")))

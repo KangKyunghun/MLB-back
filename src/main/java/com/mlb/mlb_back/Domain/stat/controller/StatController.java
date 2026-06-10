@@ -1,7 +1,6 @@
 package com.mlb.mlb_back.Domain.stat.controller;
 
-import com.mlb.mlb_back.Domain.stat.dto.BatterStatResponse;
-import com.mlb.mlb_back.Domain.stat.dto.PitcherStatResponse;
+import com.mlb.mlb_back.Domain.stat.dto.*;
 import com.mlb.mlb_back.Domain.stat.service.StatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -92,13 +91,103 @@ public class StatController {
         return ResponseEntity.ok(statService.getPitcherLeaderboard(season, gameType, statType, limit));
     }
 
-    // GET /api/teams/135/pitcher-stats?season=2024&gameType=R
-    // GET /api/teams/135/pitcher-stats?season=2024&gameType=PS
+    // GET /api/teams/{teamId}/pitcher-stats?season=2024&gameType=R
     @GetMapping("/teams/{teamId}/pitcher-stats")
     public ResponseEntity<List<PitcherStatResponse>> getPitcherStatsByTeam(
             @PathVariable Long teamId,
             @RequestParam Integer season,
             @RequestParam(defaultValue = "R") String gameType) {
         return ResponseEntity.ok(statService.getPitcherStatsByTeam(teamId, season, gameType));
+    }
+
+    // ── 핫콜드존 ──────────────────────────────────────────────
+
+    // GET /api/players/{playerId}/hot-cold-zones?season=2024&gameType=R
+    @GetMapping("/players/{playerId}/hot-cold-zones")
+    public ResponseEntity<HotColdZoneResponse> getHotColdZone(
+            @PathVariable Long playerId,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getHotColdZone(playerId, season, gameType));
+    }
+
+    // GET /api/players/{playerId}/hot-cold-zones/all
+    @GetMapping("/players/{playerId}/hot-cold-zones/all")
+    public ResponseEntity<List<HotColdZoneResponse>> getHotColdZonesAll(
+            @PathVariable Long playerId) {
+        return ResponseEntity.ok(statService.getHotColdZonesAll(playerId));
+    }
+
+    // ── 스프레이차트 ───────────────────────────────────────────
+
+    // GET /api/players/{playerId}/spray-data?season=2024&gameType=R
+    @GetMapping("/players/{playerId}/spray-data")
+    public ResponseEntity<List<SprayDataResponse>> getSprayData(
+            @PathVariable Long playerId,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getSprayData(playerId, season, gameType));
+    }
+
+    // ── 월간 스탯 ──────────────────────────────────────────────
+
+    // GET /api/players/{playerId}/monthly-stats?season=2024
+    @GetMapping("/players/{playerId}/monthly-stats")
+    public ResponseEntity<List<PlayerMonthlyStatResponse>> getMonthlyStats(
+            @PathVariable Long playerId,
+            @RequestParam Integer season) {
+        return ResponseEntity.ok(statService.getMonthlyStats(playerId, season));
+    }
+
+    // ── 스플릿 스탯 (득점권/좌우투수) ────────────────────────────
+
+    // GET /api/players/{playerId}/situation-stats?season=2024&gameType=R
+    @GetMapping("/players/{playerId}/situation-stats")
+    public ResponseEntity<List<BatterSituationStatResponse>> getSituationStats(
+            @PathVariable Long playerId,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getSituationStats(playerId, season, gameType));
+    }
+
+    // GET /api/players/{playerId}/situation-stats/{sitCode}?season=2024&gameType=R
+    // sitCode: risp(득점권), vl(좌투상대), vr(우투상대)
+    @GetMapping("/players/{playerId}/situation-stats/{sitCode}")
+    public ResponseEntity<BatterSituationStatResponse> getSituationStatBySitCode(
+            @PathVariable Long playerId,
+            @PathVariable String sitCode,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getSituationStatBySitCode(playerId, season, sitCode, gameType));
+    }
+
+    // ── 타자 vs 투수 ───────────────────────────────────────────
+
+    // GET /api/players/{batterId}/vs-pitcher?season=2024&gameType=R
+    @GetMapping("/players/{batterId}/vs-pitcher")
+    public ResponseEntity<List<BatterVsPitcherResponse>> getBatterVsPitcher(
+            @PathVariable Long batterId,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getBatterVsPitcher(batterId, season, gameType));
+    }
+
+    // GET /api/players/{pitcherId}/vs-batter?season=2024&gameType=R
+    @GetMapping("/players/{pitcherId}/vs-batter")
+    public ResponseEntity<List<BatterVsPitcherResponse>> getPitcherVsBatter(
+            @PathVariable Long pitcherId,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getPitcherVsBatter(pitcherId, season, gameType));
+    }
+
+    // GET /api/players/{batterId}/vs-pitcher/{pitcherId}?season=2024&gameType=R
+    @GetMapping("/players/{batterId}/vs-pitcher/{pitcherId}")
+    public ResponseEntity<BatterVsPitcherResponse> getBatterVsPitcherDetail(
+            @PathVariable Long batterId,
+            @PathVariable Long pitcherId,
+            @RequestParam Integer season,
+            @RequestParam(defaultValue = "R") String gameType) {
+        return ResponseEntity.ok(statService.getBatterVsPitcherDetail(batterId, pitcherId, season, gameType));
     }
 }

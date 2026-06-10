@@ -1,11 +1,8 @@
 package com.mlb.mlb_back.Domain.stat.service;
 
-import com.mlb.mlb_back.Domain.stat.dto.BatterStatResponse;
-import com.mlb.mlb_back.Domain.stat.dto.PitcherStatResponse;
-import com.mlb.mlb_back.Domain.stat.entity.BatterStat;
-import com.mlb.mlb_back.Domain.stat.entity.PitcherStat;
-import com.mlb.mlb_back.Domain.stat.repository.BatterStatRepository;
-import com.mlb.mlb_back.Domain.stat.repository.PitcherStatRepository;
+import com.mlb.mlb_back.Domain.stat.dto.*;
+import com.mlb.mlb_back.Domain.stat.entity.*;
+import com.mlb.mlb_back.Domain.stat.repository.*;
 import com.mlb.mlb_back.Global.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +19,11 @@ public class StatService {
 
     private final BatterStatRepository batterStatRepository;
     private final PitcherStatRepository pitcherStatRepository;
+    private final HotColdZoneRepository hotColdZoneRepository;
+    private final SprayDataRepository sprayDataRepository;
+    private final PlayerMonthlyStatRepository playerMonthlyStatRepository;
+    private final BatterSituationStatRepository batterSituationStatRepository;
+    private final BatterVsPitcherRepository batterVsPitcherRepository;
 
     // ── 타자 스탯 ─────────────────────────────────────────────
 
@@ -191,5 +193,93 @@ public class StatService {
             case "strikeoutWalkRatio" -> Comparator.comparing((PitcherStat s) -> s.getStrikeoutWalkRatio() != null ? s.getStrikeoutWalkRatio() : 0.0).reversed();
             default -> Comparator.comparing((PitcherStat s) -> s.getEra() != null ? s.getEra() : 99.0);
         };
+    }
+
+    // ── 핫콜드존 ──────────────────────────────────────────────
+
+    public HotColdZoneResponse getHotColdZone(Long playerId, Integer season, String gameType) {
+        return hotColdZoneRepository.findByPlayerId(playerId).stream()
+                .filter(z -> z.getSeason().equals(season) && z.getGameType().equals(gameType))
+                .findFirst()
+                .map(HotColdZoneResponse::from)
+                .orElseThrow(() -> ApiException.notFound(
+                        "핫콜드존 데이터를 찾을 수 없습니다: playerId=" + playerId + ", season=" + season + ", gameType=" + gameType));
+    }
+
+    public List<HotColdZoneResponse> getHotColdZonesAll(Long playerId) {
+        return hotColdZoneRepository.findByPlayerId(playerId).stream()
+                .sorted(Comparator.comparing(HotColdZone::getSeason).reversed())
+                .map(HotColdZoneResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    // ── 스프레이차트 ───────────────────────────────────────────
+
+    public List<SprayDataResponse> getSprayData(Long playerId, Integer season, String gameType) {
+        List<SprayData> data = switch (gameType) {
+            case "R"  -> sprayDataRepository.findByPlayerRegularSeason(playerId, season);
+            case "W"  -> sprayDataRepository.findByPlayerWildCard(playerId, season);
+            case "D"  -> sprayDataRepository.findByPlayerDivisionSeries(playerId, season);
+            case "L"  -> sprayDataRepository.findByPlayerChampionshipSeries(playerId, season);
+            case "F"  -> sprayDataRepository.findByPlayerWorldSeries(playerId, season);
+            case "PS" -> sprayDataRepository.findByPlayerPostSeason(playerId, season);
+            default   -> sprayDataRepository.findByPlayerRegularSeason(playerId, season);
+        };
+        return data.stream()
+                .map(SprayDataResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    // ── 월간 스탯 ──────────────────────────────────────────────
+
+    public List<PlayerMonthlyStatResponse> getMonthlyStats(Long playerId, Integer season) {
+        return playerMonthlyStatRepository.findByPlayerIdAndSeasonOrderByMonth(playerId, season).stream()
+                .map(PlayerMonthlyStatResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    // ── 스플릿 스탯 ────────────────────────────────────────────
+
+    public List<BatterSituationStatResponse> getSituationStats(Long playerId, Integer season, String gameType) {
+        return batterSituationStatRepository.findByPlayerIdAndSeason(playerId, season).stream()
+                .filter(s -> s.getGameType().equals(gameType))
+                .map(BatterSituationStatResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    public BatterSituationStatResponse getSituationStatBySitCode(Long playerId, Integer season, String sitCode, String gameType) {
+        return batterSituationStatRepository.findByPlayerIdAndSeason(playerId, season).stream()
+                .filter(s -> s.getSitCode().equals(sitCode) && s.getGameType().equals(gameType))
+                .findFirst()
+                .map(BatterSituationStatResponse::from)
+                .orElseThrow(() -> ApiException.notFound(
+                        "스플릿 스탯을 찾을 수 없습니다: playerId=" + playerId + ", sitCode=" + sitCode + ", gameType=" + gameType));
+    }
+
+    // ── 타자 vs 투수 ───────────────────────────────────────────
+
+    public List<BatterVsPitcherResponse> getBatterVsPitcher(Long batterId, Integer season, String gameType) {
+        return batterVsPitcherRepository.findByBatterIdAndSeason(batterId, season).stream()
+                .filter(r -> r.getGameType().equals(gameType))
+                .sorted(Comparator.comparing(BatterVsPitcher::getAtBats).reversed())
+                .map(BatterVsPitcherResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    public List<BatterVsPitcherResponse> getPitcherVsBatter(Long pitcherId, Integer season, String gameType) {
+        return batterVsPitcherRepository.findByPitcherIdAndSeason(pitcherId, season).stream()
+                .filter(r -> r.getGameType().equals(gameType))
+                .sorted(Comparator.comparing(BatterVsPitcher::getAtBats).reversed())
+                .map(BatterVsPitcherResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    public BatterVsPitcherResponse getBatterVsPitcherDetail(Long batterId, Long pitcherId, Integer season, String gameType) {
+        return batterVsPitcherRepository.findByBatterIdAndSeason(batterId, season).stream()
+                .filter(r -> r.getPitcher().getId().equals(pitcherId) && r.getGameType().equals(gameType))
+                .findFirst()
+                .map(BatterVsPitcherResponse::from)
+                .orElseThrow(() -> ApiException.notFound(
+                        "타자 vs 투수 데이터를 찾을 수 없습니다: batterId=" + batterId + ", pitcherId=" + pitcherId));
     }
 }

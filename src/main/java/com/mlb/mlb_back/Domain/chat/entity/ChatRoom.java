@@ -18,14 +18,16 @@ public class ChatRoom extends BaseEntity {
     private Long id;
 
     /**
-     * 경기별 채팅방 1개
+     * 경기별 채팅방 1개 (game_id unique)
      */
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "game_id", nullable = false, unique = true)
     private Game game;
 
     /**
-     * 경기 진행 중 여부
+     * Live 경기 여부 (Live 배지 표시용 - 채팅 가능 여부와 무관)
+     * true  → 현재 진행중인 경기 (Live 배지 표시)
+     * false → 예정/종료 경기 (채팅은 동일하게 가능)
      */
     @Column(name = "is_active", nullable = false)
     @Builder.Default
@@ -33,7 +35,8 @@ public class ChatRoom extends BaseEntity {
 
     /**
      * 채팅방 이름
-     * 예: "LAD vs NYY"
+     * 예: "LAD vs NYY (2024-06-10)"
+     * 날짜 포함으로 같은 팀 간 시즌 중 여러 경기 구분
      */
     @Column(name = "room_name", nullable = false, unique = true)
     private String roomName;

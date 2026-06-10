@@ -22,4 +22,6 @@ public interface GameRepository extends JpaRepository<Game, Long> {
 
     List<Game> findBySeasonAndStatusIn(Integer season, List<String> statuses);
 
+    // 특정 날짜 범위 + status로 경기 조회 (Live 경기 감지용)
+    List<Game> findByStatusAndGameDateBetween(String status, LocalDateTime start, LocalDateTime end);
 }

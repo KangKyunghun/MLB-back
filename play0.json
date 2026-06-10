@@ -1,0 +1,503 @@
+{
+  "result": {
+    "type": "atBat",
+    "event": "Walk",
+    "eventType": "walk",
+    "description": "Mookie Betts walks.",
+    "rbi": 0,
+    "awayScore": 0,
+    "homeScore": 0,
+    "isOut": false
+  },
+  "about": {
+    "atBatIndex": 0,
+    "halfInning": "top",
+    "isTopInning": true,
+    "inning": 1,
+    "startTime": "2024-03-20T10:07:55.805Z",
+    "endTime": "2024-03-20T10:09:44.762Z",
+    "isComplete": true,
+    "isScoringPlay": false,
+    "hasReview": false,
+    "hasOut": false,
+    "captivatingIndex": 0
+  },
+  "count": {
+    "balls": 4,
+    "strikes": 1,
+    "outs": 0
+  },
+  "matchup": {
+    "batter": {
+      "id": 605141,
+      "fullName": "Mookie Betts",
+      "link": "/api/v1/people/605141"
+    },
+    "batSide": {
+      "code": "R",
+      "description": "Right"
+    },
+    "pitcher": {
+      "id": 506433,
+      "fullName": "Yu Darvish",
+      "link": "/api/v1/people/506433"
+    },
+    "pitchHand": {
+      "code": "R",
+      "description": "Right"
+    },
+    "postOnFirst": {
+      "id": 605141,
+      "fullName": "Mookie Betts",
+      "link": "/api/v1/people/605141"
+    },
+    "batterHotColdZones": [],
+    "pitcherHotColdZones": [],
+    "splits": {
+      "batter": "vs_RHP",
+      "pitcher": "vs_RHB",
+      "menOnBase": "Men_On"
+    }
+  },
+  "pitchIndex": [
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "actionIndex": [
+    0,
+    1,
+    2
+  ],
+  "runnerIndex": [
+    0
+  ],
+  "runners": [
+    {
+      "movement": {
+        "originBase": null,
+        "start": null,
+        "end": "1B",
+        "outBase": null,
+        "isOut": false,
+        "outNumber": null
+      },
+      "details": {
+        "event": "Walk",
+        "eventType": "walk",
+        "movementReason": null,
+        "runner": {
+          "id": 605141,
+          "fullName": "Mookie Betts",
+          "link": "/api/v1/people/605141"
+        },
+        "responsiblePitcher": null,
+        "isScoringEvent": false,
+        "rbi": false,
+        "earned": false,
+        "teamUnearned": false,
+        "playIndex": 7
+      },
+      "credits": []
+    }
+  ],
+  "playEvents": [
+    {
+      "details": {
+        "description": "Status Change - Pre-Game",
+        "event": "Game Advisory",
+        "eventType": "game_advisory",
+        "awayScore": 0,
+        "homeScore": 0,
+        "isScoringPlay": false,
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 0,
+        "strikes": 0,
+        "outs": 0
+      },
+      "index": 0,
+      "startTime": "2024-03-20T05:40:50.547Z",
+      "endTime": "2024-03-20T09:46:31.165Z",
+      "isPitch": false,
+      "type": "action",
+      "player": {
+        "id": 605141,
+        "link": "/api/v1/people/605141"
+      }
+    },
+    {
+      "details": {
+        "description": "Status Change - Warmup",
+        "event": "Game Advisory",
+        "eventType": "game_advisory",
+        "awayScore": 0,
+        "homeScore": 0,
+        "isScoringPlay": false,
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 0,
+        "strikes": 0,
+        "outs": 0
+      },
+      "index": 1,
+      "startTime": "2024-03-20T09:46:31.165Z",
+      "endTime": "2024-03-20T10:07:25.120Z",
+      "isPitch": false,
+      "type": "action",
+      "player": {
+        "id": 605141,
+        "link": "/api/v1/people/605141"
+      }
+    },
+    {
+      "details": {
+        "description": "Status Change - In Progress",
+        "event": "Game Advisory",
+        "eventType": "game_advisory",
+        "awayScore": 0,
+        "homeScore": 0,
+        "isScoringPlay": false,
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 0,
+        "strikes": 0,
+        "outs": 0
+      },
+      "index": 2,
+      "startTime": "2024-03-20T10:07:25.120Z",
+      "endTime": "2024-03-20T10:07:57.184Z",
+      "isPitch": false,
+      "type": "action",
+      "player": {
+        "id": 605141,
+        "link": "/api/v1/people/605141"
+      }
+    },
+    {
+      "details": {
+        "call": {
+          "code": "B",
+          "description": "Ball"
+        },
+        "description": "Ball",
+        "code": "B",
+        "ballColor": "rgba(39, 161, 39, 1.0)",
+        "trailColor": "rgba(188, 0, 33, 1.0)",
+        "isInPlay": false,
+        "isStrike": false,
+        "isBall": true,
+        "type": {
+          "code": "FF",
+          "description": "Four-Seam Fastball"
+        },
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 1,
+        "strikes": 0,
+        "outs": 0
+      },
+      "pitchData": {
+        "startSpeed": 94.5,
+        "endSpeed": 85.8,
+        "strikeZoneTop": 3.11,
+        "strikeZoneBottom": 1.5,
+        "coordinates": {
+          "aY": 32.04642,
+          "aZ": -12.93249,
+          "pfxX": -4.444094448108372,
+          "pfxZ": 10.212323093038844,
+          "pX": 1.3965551,
+          "pZ": 2.3756232,
+          "vX0": 9.402402,
+          "vY0": -136.85551,
+          "vZ0": -6.415233,
+          "x": 63.77,
+          "y": 174.64,
+          "x0": -1.5175525,
+          "y0": 50.0,
+          "z0": 5.6481133,
+          "aX": -8.373341
+        },
+        "breaks": {
+          "breakAngle": 22.8,
+          "breakLength": 3.6,
+          "breakY": 24.0,
+          "breakVertical": -13.4,
+          "breakVerticalInduced": 17.4,
+          "breakHorizontal": 6.2,
+          "spinRate": 2394,
+          "spinDirection": 200
+        },
+        "zone": 12,
+        "typeConfidence": 2.0,
+        "plateTime": 0.39965900778770447,
+        "extension": 6.573038307700569
+      },
+      "index": 3,
+      "playId": "17ba7a1a-2f47-4240-8555-d701b1746d40",
+      "pitchNumber": 1,
+      "startTime": "2024-03-20T10:07:57.184Z",
+      "endTime": "2024-03-20T10:08:02.125Z",
+      "isPitch": true,
+      "type": "pitch"
+    },
+    {
+      "details": {
+        "call": {
+          "code": "F",
+          "description": "Foul"
+        },
+        "description": "Foul",
+        "code": "F",
+        "ballColor": "rgba(170, 21, 11, 1.0)",
+        "trailColor": "rgba(188, 0, 33, 1.0)",
+        "isInPlay": false,
+        "isStrike": true,
+        "isBall": false,
+        "type": {
+          "code": "FF",
+          "description": "Four-Seam Fastball"
+        },
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 1,
+        "strikes": 1,
+        "outs": 0
+      },
+      "pitchData": {
+        "startSpeed": 92.6,
+        "endSpeed": 84.0,
+        "strikeZoneTop": 3.11,
+        "strikeZoneBottom": 1.5,
+        "coordinates": {
+          "aY": 30.781626,
+          "aZ": -12.689226,
+          "pfxX": -2.3840944187378317,
+          "pfxZ": 10.749487661001249,
+          "pX": 0.5582776,
+          "pZ": 3.0190976,
+          "vX0": 6.822375,
+          "vY0": -134.2219,
+          "vZ0": -4.648907,
+          "x": 95.72,
+          "y": 157.26,
+          "x0": -1.7135434,
+          "y0": 50.0,
+          "z0": 5.685991,
+          "aX": -4.321496
+        },
+        "breaks": {
+          "breakAngle": 12.0,
+          "breakLength": 3.6,
+          "breakY": 24.0,
+          "breakVertical": -13.3,
+          "breakVerticalInduced": 19.2,
+          "breakHorizontal": 3.0,
+          "spinRate": 2304,
+          "spinDirection": 189
+        },
+        "zone": 3,
+        "typeConfidence": 2.0,
+        "plateTime": 0.4103589951992035,
+        "extension": 6.187004758304185
+      },
+      "index": 4,
+      "playId": "3939568e-7c0e-4a47-a04f-1af9ecee02e8",
+      "pitchNumber": 2,
+      "startTime": "2024-03-20T10:08:18.953Z",
+      "endTime": "2024-03-20T10:08:21.953Z",
+      "isPitch": true,
+      "type": "pitch"
+    },
+    {
+      "details": {
+        "call": {
+          "code": "B",
+          "description": "Ball"
+        },
+        "description": "Ball",
+        "code": "B",
+        "ballColor": "rgba(39, 161, 39, 1.0)",
+        "trailColor": "rgba(50, 0, 221, 1.0)",
+        "isInPlay": false,
+        "isStrike": false,
+        "isBall": true,
+        "type": {
+          "code": "SI",
+          "description": "Sinker"
+        },
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 2,
+        "strikes": 1,
+        "outs": 0
+      },
+      "pitchData": {
+        "startSpeed": 93.4,
+        "endSpeed": 84.7,
+        "strikeZoneTop": 3.11,
+        "strikeZoneBottom": 1.5,
+        "coordinates": {
+          "aY": 31.26502,
+          "aZ": -18.858133,
+          "pfxX": -10.169527427418025,
+          "pfxZ": 7.241535491830719,
+          "pX": 0.7311221,
+          "pZ": 2.5198424,
+          "vX0": 9.9186325,
+          "vY0": -135.19696,
+          "vZ0": -4.561424,
+          "x": 89.13,
+          "y": 170.74,
+          "x0": -1.6793503,
+          "y0": 50.0,
+          "z0": 5.564075,
+          "aX": -18.69996
+        },
+        "breaks": {
+          "breakAngle": 39.6,
+          "breakLength": 6.0,
+          "breakY": 24.0,
+          "breakVertical": -19.6,
+          "breakVerticalInduced": 12.4,
+          "breakHorizontal": 17.0,
+          "spinRate": 2325,
+          "spinDirection": 236
+        },
+        "zone": 6,
+        "typeConfidence": 2.0,
+        "plateTime": 0.4067099988460541,
+        "extension": 6.281187528074569
+      },
+      "index": 5,
+      "playId": "004fde4b-b67e-47d7-9728-e69ae5d8f86b",
+      "pitchNumber": 3,
+      "startTime": "2024-03-20T10:08:42.311Z",
+      "endTime": "2024-03-20T10:08:47.601Z",
+      "isPitch": true,
+      "type": "pitch"
+    },
+    {
+      "details": {
+        "call": {
+          "code": "B",
+          "description": "Ball"
+        },
+        "description": "Ball",
+        "code": "B",
+        "ballColor": "rgba(39, 161, 39, 1.0)",
+        "trailColor": "rgba(50, 0, 221, 1.0)",
+        "isInPlay": false,
+        "isStrike": false,
+        "isBall": true,
+        "type": {
+          "code": "SI",
+          "description": "Sinker"
+        },
+        "isOut": false,
+        "hasReview": false
+      },
+      "count": {
+        "balls": 3,
+        "strikes": 1,
+        "outs": 0
+      },
+      "pitchData": {
+        "startSpeed": 93.9,
+        "endSpeed": 85.1,
+        "strikeZoneTop": 3.11,
+        "strikeZoneBottom": 1.5,
+        "coordinates": {
+          "aY": 32.54269,
+          "aZ": -18.354183,
+          "pfxX": -8.831889493258918,
+          "pfxZ": 7.420551237158888,
+          "pX": -2.0162008,
+          "pZ": 2.9017618,
+          "vX0": 3.1443536,
+          "vY0": -136.25337,
+          "vZ0": -3.75603,
+          "x": 193.85,
+          "y": 160.43,
+          "x0": -2.0540583,
+          "y0": 50.0,
+          "z0": 5.5818734,
+          "aX": -16.44831
+        },
+        "breaks": {
+          "breakAngle": 39.6,
+          "breakLength": 6.0,
+          "breakY": 24.0,
+          "breakVertical": -18.8,
+          "breakVerticalInduced": 13.1,
+          "breakHorizontal": 16.1,
+          "spinRate": 2393,
+          "spinDirection": 233
+        },
+        "zone": 11,
+        "typeConfidence": 2.0,
+        "plateTime": 0.4063900113105774,
+        "extension": 5.945095161753376
+      },
+      "index": 6,
+      "playId": "066ebfaa-a4df-4b12-b604-4ba1abc0ebc6",
+      "pitchNumber": 4,
+      "startTime": "2024-03-20T10:09:03.512Z",
+      "endTime": "2024-03-20T10:09:07.031Z",
+      "isPitch": true,
+      "type": "pitch"
+    },
+    {
+      "details": {
+        "call": {
+          "code": "VP",
+          "description": "Automatic Ball - Pitcher Pitch Timer Violation"
+        },
+        "description": "Automatic Ball - Pitcher Pitch Timer Violation",
+        "code": "VP",
+        "isInPlay": false,
+        "isStrike": false,
+        "isBall": true,
+        "isOut": false,
+        "hasReview": false,
+        "violation": {
+          "type": "pitcher_pitch_timer",
+          "description": "Pitcher Pitch Timer Violation",
+          "player": {
+            "id": 506433,
+            "fullName": "Yu Darvish"
+          }
+        }
+      },
+      "count": {
+        "balls": 4,
+        "strikes": 1,
+        "outs": 0
+      },
+      "index": 7,
+      "playId": "07454446-0016-1003-000c-f08cd117d70a",
+      "pitchNumber": 4,
+      "startTime": "2024-03-20T10:09:42.717Z",
+      "endTime": "2024-03-20T10:09:44.762Z",
+      "isPitch": false,
+      "type": "no_pitch"
+    }
+  ],
+  "playEndTime": "2024-03-20T10:09:44.762Z",
+  "atBatIndex": 0
+}
