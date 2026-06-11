@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+
 @RestController
 @RequiredArgsConstructor
 public class ChatController {
@@ -80,5 +83,22 @@ public class ChatController {
         }
 
         chatService.sendMessage(chatRoomId, principal.getName(), request.getContent());
+    }
+
+    // ──────────────────────────────────────────────
+    // 임시 테스트용 (프론트 연동 후 삭제)
+    // ──────────────────────────────────────────────
+
+    /**
+     * REST로 채팅 메시지 전송 (WebSocket 테스트용)
+     * POST /api/chat/rooms/{chatRoomId}/messages/test
+     */
+    @PostMapping("/api/chat/rooms/{chatRoomId}/messages/test")
+    public ResponseEntity<ChatMessageResponse> sendMessageTest(
+            @PathVariable Long chatRoomId,
+            @RequestBody ChatMessageRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(
+                chatService.sendMessage(chatRoomId, userDetails.getUsername(), request.getContent()));
     }
 }

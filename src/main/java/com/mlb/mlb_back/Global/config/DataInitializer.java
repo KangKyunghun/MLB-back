@@ -76,7 +76,7 @@ public class DataInitializer implements ApplicationRunner {
         )
         .build();
 
-    private static final List<Integer> SEASONS = List.of(2024, 2025, 2026); // 2024, 2025 시즌 데이터 수집 완료 , 채팅방 유지를 위한 3개 시즌 다시 수집
+    private static final List<Integer> SEASONS = List.of(2026); // 2024, 2025 시즌 수집 완료 & 채팅방은 gamepk 기준으로 진행이므로 굳이 추가 안해도 됨
 
     @Override
     public void run(ApplicationArguments args) {

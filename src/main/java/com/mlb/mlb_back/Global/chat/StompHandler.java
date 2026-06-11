@@ -31,6 +31,8 @@ public class StompHandler implements ChannelInterceptor {
 
         if (accessor == null) return message;
 
+        log.info("STOMP Command: {}", accessor.getCommand());
+
         // CONNECT 시에만 JWT 검증
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             String authHeader = accessor.getFirstNativeHeader("Authorization");
