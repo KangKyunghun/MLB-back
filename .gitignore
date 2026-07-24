@@ -41,3 +41,9 @@ src/main/resources/application.yaml
 src/main/resources/application.yml
 src/main/resources/logback-spring.xml
 logs/
+
+### macOS ###
+.DS_Store
+
+### 압축 파일 ###
+*.zip
