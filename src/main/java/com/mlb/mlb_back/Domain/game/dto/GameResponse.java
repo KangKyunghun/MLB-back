@@ -4,7 +4,7 @@ import com.mlb.mlb_back.Domain.game.entity.Game;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Builder
@@ -16,7 +16,7 @@ public class GameResponse {
     private String gameType;
     private Integer gameNumber;
     private String seriesDescription;
-    private LocalDateTime gameDate;
+    private Instant gameDate; // UTC 시점. 프론트에서 "...Z" 형식 그대로 받아 원하는 타임존으로 표시
     private String venue;
 
     // 홈팀

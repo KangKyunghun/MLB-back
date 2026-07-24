@@ -11,6 +11,8 @@ public interface BatterSituationStatRepository extends JpaRepository<BatterSitua
     /** 선수의 특정 시즌 전체 상황 스탯 */
     List<BatterSituationStat> findByPlayerIdAndSeason(Long playerId, Integer season);
 
+    void deleteBySeasonAndGameType(Integer season, String gameType);
+
     /** 선수의 특정 시즌 + 상황 코드 */
     Optional<BatterSituationStat> findByPlayerIdAndSeasonAndSitCode(
             Long playerId, Integer season, String sitCode);

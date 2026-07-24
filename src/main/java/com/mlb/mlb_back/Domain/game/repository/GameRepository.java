@@ -3,7 +3,7 @@ package com.mlb.mlb_back.Domain.game.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import com.mlb.mlb_back.Domain.game.entity.Game;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public interface GameRepository extends JpaRepository<Game, Long> {
@@ -14,7 +14,7 @@ public interface GameRepository extends JpaRepository<Game, Long> {
 
     List<Game> findByHomeTeamIdOrAwayTeamId(Long homeTeamId, Long awayTeamId);
 
-    List<Game> findByGameDateBetween(LocalDateTime start, LocalDateTime end);
+    List<Game> findByGameDateBetween(Instant start, Instant end);
 
     List<Game> findByStatus(String status);
 
@@ -23,5 +23,5 @@ public interface GameRepository extends JpaRepository<Game, Long> {
     List<Game> findBySeasonAndStatusIn(Integer season, List<String> statuses);
 
     // 특정 날짜 범위 + status로 경기 조회 (Live 경기 감지용)
-    List<Game> findByStatusAndGameDateBetween(String status, LocalDateTime start, LocalDateTime end);
+    List<Game> findByStatusAndGameDateBetween(String status, Instant start, Instant end);
 }

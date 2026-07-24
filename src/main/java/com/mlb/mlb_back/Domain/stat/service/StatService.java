@@ -1,5 +1,6 @@
 package com.mlb.mlb_back.Domain.stat.service;
 
+import com.mlb.mlb_back.Domain.standing.repository.StandingRepository;
 import com.mlb.mlb_back.Domain.stat.dto.*;
 import com.mlb.mlb_back.Domain.stat.entity.*;
 import com.mlb.mlb_back.Domain.stat.repository.*;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +26,8 @@ public class StatService {
     private final PlayerMonthlyStatRepository playerMonthlyStatRepository;
     private final BatterSituationStatRepository batterSituationStatRepository;
     private final BatterVsPitcherRepository batterVsPitcherRepository;
+    private final StandingRepository standingRepository;
+    
 
     // ── 타자 스탯 ─────────────────────────────────────────────
 
@@ -128,10 +132,26 @@ public class StatService {
 
     // 시즌 투수 리더보드
     public List<PitcherStatResponse> getPitcherLeaderboard(Integer season, String gameType, String statType, int limit) {
-        double minInnings = gameType.equals("R") ? 20.0 : 5.0; // 포스트시즌은 최소 이닝 기준 완화
+        // 팀별 경기 수 = 승 + 패 (규정이닝 기준, ERA에만 적용)
+        Map<Long, Integer> teamGamesPlayedMap = standingRepository.findBySeason(season).stream()
+                .collect(Collectors.toMap(
+                        s -> s.getTeam().getId(),
+                        s -> (s.getWins() != null ? s.getWins() : 0) + (s.getLosses() != null ? s.getLosses() : 0)
+                ));
+
         return pitcherStatRepository.findBySeasonAndGameType(season, gameType)
                 .stream()
-                .filter(s -> s.getInningsPitched() != null && s.getInningsPitched() >= minInnings)
+                .filter(s -> {
+                    if (!"era".equals(statType)) return true; // ERA 아니면 규정이닝 필터 안 함
+
+                    if (s.getInningsPitched() == null) return false;
+                    if (!gameType.equals("R")) {
+                        return s.getInningsPitched() >= 5.0; // 포스트시즌은 완화된 고정 기준 유지
+                    }
+                    Integer teamGamesPlayed = teamGamesPlayedMap.get(s.getTeam().getId());
+                    if (teamGamesPlayed == null || teamGamesPlayed == 0) return false;
+                    return s.getInningsPitched() >= teamGamesPlayed; // 실제 MLB 규정이닝 룰
+                })
                 .sorted(getPitcherLeaderboardComparator(statType))
                 .limit(limit)
                 .map(PitcherStatResponse::from)

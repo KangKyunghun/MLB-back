@@ -33,7 +33,8 @@ Spring Boot와 JPA를 기반으로 MLB 팀, 선수, 경기 데이터를 저장�
 - Redis (예정)
 
 ### Frontend
-- React (예정)
+- React
+- Next.js
 
 ### Tools
 - VS Code

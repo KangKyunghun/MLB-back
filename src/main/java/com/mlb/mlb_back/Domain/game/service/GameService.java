@@ -14,8 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,6 +25,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class GameService {
+
+    // 한국 사용자 기준 서비스이므로 "오늘", "날짜별 조회"는 KST(Asia/Seoul)를 기준으로 하루를 정의합니다.
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final GameRepository gameRepository;
     private final BoxScoreRepository boxScoreRepository;
@@ -45,7 +49,12 @@ public class GameService {
         return boxScoreRepository.findByGameId(gameId).stream()
                 .sorted(Comparator
                         .comparing((BoxScore bs) -> "BATTER".equals(bs.getPlayerType()) ? 0 : 1)
-                        .thenComparing(bs -> bs.getBattingOrder() != null ? bs.getBattingOrder() : 99)
+                        .thenComparing(bs -> {
+                            if ("BATTER".equals(bs.getPlayerType())) {
+                                return bs.getBattingOrder() != null ? bs.getBattingOrder() : 99;
+                            }
+                            return bs.getAppearanceOrder() != null ? bs.getAppearanceOrder() : 99;
+                        })
                         .thenComparing(bs -> bs.getPlayer().getFullName()))
                 .map(BoxScoreResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -69,10 +78,11 @@ public class GameService {
                 .collect(Collectors.toList());
     }
 
-    // 날짜별 경기 목록
+    // 날짜별 경기 목록 (date는 "한국시간 기준 그 날짜"로 해석)
     public List<GameResponse> getGamesByDate(LocalDate date) {
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.atTime(23, 59, 59);
+        Instant start = date.atStartOfDay(KST).toInstant();
+        // Between은 양 끝을 포함하므로, 다음날 00:00:00(KST) "직전"까지로 끝을 살짝 당겨줍니다.
+        Instant end = date.plusDays(1).atStartOfDay(KST).toInstant().minusNanos(1);
         return gameRepository.findByGameDateBetween(start, end).stream()
                 .map(GameResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -99,8 +109,8 @@ public class GameService {
                 .collect(Collectors.toList());
     }
 
-    // 오늘 경기 목록
+    // 오늘 경기 목록 (한국시간 기준 오늘)
     public List<GameResponse> getTodayGames() {
-        return getGamesByDate(LocalDate.now());
+        return getGamesByDate(LocalDate.now(KST));
     }
 }

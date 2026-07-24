@@ -26,6 +26,8 @@ public class BoxScoreResponse {
     private Integer walks;
     private Integer strikeOuts;
     private Integer battingOrder;
+    private Integer appearanceOrder;
+    private String gamePosition;
 
     private Double inningsPitched;
     private Integer earnedRuns;
@@ -35,6 +37,7 @@ public class BoxScoreResponse {
     private Integer pitchCount;
     private Boolean isWin;
     private Boolean isLoss;
+    private Boolean isHold;
     private Boolean isSave;
 
     public static BoxScoreResponse fromEntity(BoxScore boxScore) {
@@ -61,6 +64,8 @@ public class BoxScoreResponse {
                 .walks(boxScore.getWalks())
                 .strikeOuts(boxScore.getStrikeOuts())
                 .battingOrder(boxScore.getBattingOrder())
+                .appearanceOrder(boxScore.getAppearanceOrder())
+                .gamePosition(boxScore.getGamePosition())
                 .inningsPitched(boxScore.getInningsPitched())
                 .earnedRuns(boxScore.getEarnedRuns())
                 .hitsAllowed(boxScore.getHitsAllowed())
@@ -69,6 +74,7 @@ public class BoxScoreResponse {
                 .pitchCount(boxScore.getPitchCount())
                 .isWin(boxScore.getIsWin())
                 .isLoss(boxScore.getIsLoss())
+                .isHold(boxScore.getIsHold())
                 .isSave(boxScore.getIsSave())
                 .build();
     }

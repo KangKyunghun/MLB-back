@@ -12,14 +12,18 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TimelineScheduler {
+
+    // "오늘"은 한국시간(KST) 기준으로 판단합니다.
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final GameRepository gameRepository;
     private final ChatRoomRepository chatRoomRepository;
@@ -36,8 +40,9 @@ public class TimelineScheduler {
     @Scheduled(fixedDelay = 30_000)
     @Transactional
     public void syncLiveBadge() {
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime endOfDay = startOfDay.plusDays(1);
+        LocalDate today = LocalDate.now(KST);
+        Instant startOfDay = today.atStartOfDay(KST).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(KST).toInstant().minusNanos(1);
 
         // 오늘 Live 경기 목록
         List<Game> liveGames = gameRepository
@@ -57,7 +62,7 @@ public class TimelineScheduler {
                         // 아직 아무도 경기 페이지에 안 들어갔을 경우 → 서버가 직접 생성
                         String roomName = game.getAwayTeam().getAbbreviation()
                                 + " vs " + game.getHomeTeam().getAbbreviation()
-                                + " (" + game.getGameDate().toLocalDate() + ")";
+                                + " (" + game.getGameDate().atZone(KST).toLocalDate() + ")";
 
                         ChatRoom newRoom = ChatRoom.builder()
                                 .game(game)

@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.ZoneId;
 
 @Slf4j
 @Service
@@ -29,6 +30,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ChatService {
 
+    // 채팅방 이름에 들어가는 날짜는 한국시간(KST) 기준으로 표시
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final GameRepository gameRepository;
@@ -53,8 +56,8 @@ public class ChatService {
                             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "경기를 찾을 수 없습니다"));
 
                     String roomName = game.getAwayTeam().getAbbreviation()
-                            + " vs " + game.getHomeTeam().getAbbreviation()
-                            + " (" + game.getGameDate().toLocalDate() + ")";
+                        + " vs " + game.getHomeTeam().getAbbreviation()
+                        + " (" + game.getGameDate().atZone(KST).toLocalDate() + ")";
 
                     ChatRoom chatRoom = ChatRoom.builder()
                             .game(game)

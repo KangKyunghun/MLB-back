@@ -9,6 +9,8 @@ public interface StandingRepository extends JpaRepository<Standing, Long> {
 
     long countBySeason(Integer season);
 
+    void deleteBySeason(Integer season);
+
     List<Standing> findBySeason(Integer season);
 
     List<Standing> findBySeasonAndTeamLeague(Integer season, String league);

@@ -56,6 +56,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/favorites/**").authenticated()
                         .requestMatchers("/ws/**").permitAll()//.authenticated() Test오류 방지 위해 일단 허용
 
+                        // 관리자 배치 작업 - 인증 없이 허용 (로컬 개발/운영 수동 트리거용)
+                        .requestMatchers("/api/admin/**").permitAll()
+
                         // 그 외 GET은 전부 허용
                         .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
 

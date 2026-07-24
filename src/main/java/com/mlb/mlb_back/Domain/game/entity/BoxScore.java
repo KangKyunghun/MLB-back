@@ -57,6 +57,17 @@ public class BoxScore extends BaseEntity {
     @Column(name = "batting_order")
     private Integer battingOrder; // 타순
 
+    @Column(name = "appearance_order")
+    private Integer appearanceOrder; // 투수 등판 순서 (MLB API teams.{side}.pitchers 배열 인덱스 기준)
+
+    @Column(name = "game_position", length = 10)
+    private String gamePosition; // 그 경기에서 뛴 수비 포지션 (P, C, 1B, 2B, 3B, SS, LF, CF, RF, DH 등) — MLB API boxscore의 player.position.abbreviation
+
+    /** 지연 백필용 — gamePosition만 채워 넣을 때 사용 */
+    public void updateGamePosition(String gamePosition) {
+        this.gamePosition = gamePosition;
+    }
+
     // 투수 기록
     @Column(name = "innings_pitched")
     private Double inningsPitched;
@@ -81,6 +92,9 @@ public class BoxScore extends BaseEntity {
 
     @Column(name = "is_loss")
     private Boolean isLoss;      // 패전 투수 여부
+
+    @Column(name = "is_hold")
+    private Boolean isHold;      // 홀드 여부
 
     @Column(name = "is_save")
     private Boolean isSave;      // 세이브 여부

@@ -9,6 +9,8 @@ public interface PlayerMonthlyStatRepository extends JpaRepository<PlayerMonthly
 
     List<PlayerMonthlyStat> findByPlayerIdAndSeasonOrderByMonth(Long playerId, Integer season);
 
+    void deleteBySeason(Integer season);
+    
     boolean existsByPlayerIdAndSeasonAndMonth(Long playerId, Integer season, Integer month);
 
     long countBySeason(Integer season);

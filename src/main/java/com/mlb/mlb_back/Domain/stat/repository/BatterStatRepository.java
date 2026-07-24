@@ -9,6 +9,8 @@ public interface BatterStatRepository extends JpaRepository<BatterStat, Long> {
 
     long countBySeason(Integer season);
 
+    void deleteBySeasonAndGameType(Integer season, String gameType);
+
     long countBySeasonAndGameType(Integer season, String gameType);
 
     boolean existsByPlayerIdAndSeasonAndTeamIdAndGameType(

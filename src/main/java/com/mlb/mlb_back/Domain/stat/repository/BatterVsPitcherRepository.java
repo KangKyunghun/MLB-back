@@ -15,6 +15,8 @@ public interface BatterVsPitcherRepository extends JpaRepository<BatterVsPitcher
 
     long countBySeasonAndGameType(Integer season, String gameType);
 
+    void deleteBySeasonAndGameType(Integer season, String gameType);
+
     boolean existsByBatterIdAndPitcherIdAndSeasonAndGameType(
             Long batterId, Long pitcherId, Integer season, String gameType);
 

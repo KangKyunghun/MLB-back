@@ -5,7 +5,7 @@ import com.mlb.mlb_back.Global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "game")
@@ -28,7 +28,7 @@ public class Game extends BaseEntity {
     private Team awayTeam;
 
     @Column(name = "game_date", nullable = false)
-    private LocalDateTime gameDate; // 경기 날짜/시간
+    private Instant gameDate; // 경기 날짜/시간 (UTC 기준 시점. 화면 표시 시 원하는 타임존으로 변환해서 사용)
 
     @Column(nullable = false)
     private Integer season;    // 시즌 연도 (2024, 2025, 2026)
@@ -58,5 +58,13 @@ public class Game extends BaseEntity {
         this.homeScore = homeScore;
         this.awayScore = awayScore;
         this.status = status;
+    }
+
+    public void syncFromApi(Instant gameDate, String status, Integer homeScore, Integer awayScore, String venue) {
+    this.gameDate = gameDate;
+    this.status = status;
+    this.homeScore = homeScore;
+    this.awayScore = awayScore;
+    this.venue = venue;
     }
 }

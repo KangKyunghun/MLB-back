@@ -31,6 +31,7 @@ import com.mlb.mlb_back.Domain.team.repository.TeamRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -43,6 +44,9 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.Objects;
 
 @Slf4j
 @Component
@@ -76,46 +80,47 @@ public class DataInitializer implements ApplicationRunner {
         )
         .build();
 
-    private static final List<Integer> SEASONS = List.of(2026); // 2024, 2025 시즌 수집 완료 & 채팅방은 gamepk 기준으로 진행이므로 굳이 추가 안해도 됨
+    private static final int CURRENT_SEASON = 2026;
+    
+    private static final List<String> ACTIVE_GAME_TYPES = List.of("R"); // 포스트시즌 시작하면 여기에 "W","D","L","F" 추가
 
     @Override
     public void run(ApplicationArguments args) {
-        log.info("===== MLB DataInitializer 시작 =====");
-
+        log.info("===== MLB DataInitializer 시작 (앱 구동 1회성 초기화) =====");
         initTeams();
         initPlayers();
-        // 포스트시즌 game_type 코드 목록 (W=월드시리즈, D=디비전, L=챔피언십, F=와일드카드)
-        List<String> postSeasonTypes = List.of("W", "D", "L", "F");
+        log.info("===== 팀/선수 초기화 완료 — 경기/순위/스탯 동기화는 스케줄러가 담당 =====");
+    }
 
-        for (int season : SEASONS) {
-            // ── 경기 데이터 (정규시즌 + 포스트시즌 모두 initGames에서 game_type별 저장)
-            initGames(season);
-            initStandings(season);
-            initLineScores(season);
-            initBoxScores(season);
-            initPitchData(season);
+    // ── 스케줄러 1: 5분 간격 — 경기 상태/스코어 + 종료된 경기의 상세 데이터
+    public void syncGamesAndLiveData() {
+        initGames(CURRENT_SEASON);
+        initLineScores(CURRENT_SEASON);
+        initBoxScores(CURRENT_SEASON);
+        initPitchData(CURRENT_SEASON);
+        initSprayData(CURRENT_SEASON);
+    }
 
-            // ── 정규시즌 선수 스탯
-            initBatterStats(season, "R");
-            initPitcherStats(season, "R");
-            initHotColdZones(season, "R");
-            initSprayData(season);                          // game FK로 구분 가능
-            initBatterSituationStats(season, "R");
-            initBatterSplitStats(season, "R");
-            initPlayerMonthlyStats(season);                 // 정규시즌 전용
-            initBatterVsPitcher(season, "R");
+    // ── 스케줄러 2: 30분 간격 — 순위 + 타자/투수 시즌 스탯
+    @Transactional
+    public void syncStandingsAndSeasonStats() {
+        initStandings(CURRENT_SEASON);
+        for (String gameType : ACTIVE_GAME_TYPES) {
+            initBatterStats(CURRENT_SEASON, gameType);
+            initPitcherStats(CURRENT_SEASON, gameType);
+        }
+    }
 
-            // 포스트시즌은 시리즈 별로 구현하기
-            for (String psType : postSeasonTypes) {
-                initBatterStats(season, psType);
-                initPitcherStats(season, psType);
-                initHotColdZones(season, psType);
-                initBatterSituationStats(season, psType);
-                initBatterSplitStats(season, psType);
-                initBatterVsPitcher(season, psType);
-            }
-        } 
-        log.info("===== MLB DataInitializer 완료 =====");
+    // ── 스케줄러 3: 6시간 간격 - 새부 스탯
+    @Transactional
+    public void syncDeepPlayerStats() {
+        for (String gameType : ACTIVE_GAME_TYPES) {
+            initHotColdZones(CURRENT_SEASON, gameType);
+            initBatterSituationStats(CURRENT_SEASON, gameType);
+            initBatterSplitStats(CURRENT_SEASON, gameType);
+            initBatterVsPitcher(CURRENT_SEASON, gameType);
+        }
+        initPlayerMonthlyStats(CURRENT_SEASON);
     }
 
     // ================================================
@@ -275,115 +280,125 @@ public class DataInitializer implements ApplicationRunner {
     // 경기 데이터 수집
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initGames(int season) {
-        long existingCount = gameRepository.countBySeason(season);
-        log.info("{} 시즌 경기 데이터 수집 시작... (기존 {}개)", season, existingCount);
+private void initGames(int season) {
+    long existingCount = gameRepository.countBySeason(season);
+    log.info("{} 시즌 경기 데이터 동기화 시작... (기존 {}개)", season, existingCount);
 
-        Map<String, Object> response = fetchJson("/schedule?sportId=1&season=" + season);
+    Map<String, Object> response = fetchJson("/schedule?sportId=1&season=" + season);
+    if (response == null) return;
 
-        if (response == null) return;
+    List<Map<String, Object>> dates = (List<Map<String, Object>>) response.get("dates");
+    if (dates == null) return;
 
-        List<Map<String, Object>> dates = (List<Map<String, Object>>) response.get("dates");
-        if (dates == null) return;
+    int savedCount = 0;
+    int updatedCount = 0;
 
-        int savedCount = 0;
+    for (Map<String, Object> dateObj : dates) {
+        List<Map<String, Object>> games = (List<Map<String, Object>>) dateObj.get("games");
+        if (games == null) continue;
 
-        for (Map<String, Object> dateObj : dates) {
-            List<Map<String, Object>> games = (List<Map<String, Object>>) dateObj.get("games");
-            if (games == null) continue;
+        for (Map<String, Object> g : games) {
+            try {
+                Long gameId = Long.valueOf(g.get("gamePk").toString());
+                String gameType = g.getOrDefault("gameType", "").toString();
 
-            for (Map<String, Object> g : games) {
-                try {
-                    Long gameId = Long.valueOf(g.get("gamePk").toString());
+                // 시범경기 제외
+                if (gameType.equals("S")) continue;
 
-                    if (gameRepository.existsById(gameId)) continue;
+                Map<String, Object> teams = (Map<String, Object>) g.get("teams");
+                Map<String, Object> homeMap = (Map<String, Object>) teams.get("home");
+                Map<String, Object> awayMap = (Map<String, Object>) teams.get("away");
 
-                    String gameType = g.getOrDefault("gameType", "").toString();
+                Map<String, Object> statusMap = (Map<String, Object>) g.get("status");
+                String status = statusMap != null ? statusMap.getOrDefault("detailedState", "").toString() : "";
 
-                    // 시범경기 제외
-                    if (gameType.equals("S")) {
-                        continue;
-                    }
-
-                    Map<String, Object> teams = (Map<String, Object>) g.get("teams");
-                    Map<String, Object> homeMap = (Map<String, Object>) teams.get("home");
-                    Map<String, Object> awayMap = (Map<String, Object>) teams.get("away");
-                    Map<String, Object> homeTeamMap = (Map<String, Object>) homeMap.get("team");
-                    Map<String, Object> awayTeamMap = (Map<String, Object>) awayMap.get("team");
-
-                    Long homeTeamId = Long.valueOf(homeTeamMap.get("id").toString());
-                    Long awayTeamId = Long.valueOf(awayTeamMap.get("id").toString());
-
-                    Team homeTeam = teamRepository.findById(homeTeamId).orElse(null);
-                    Team awayTeam = teamRepository.findById(awayTeamId).orElse(null);
-
-                    if (homeTeam == null || awayTeam == null) continue;
-
-                    Map<String, Object> statusMap = (Map<String, Object>) g.get("status");
-                    String status = statusMap != null ? statusMap.getOrDefault("detailedState", "").toString() : "";
-
-                    String gameDateStr = g.getOrDefault("gameDate", "").toString();
-                    LocalDateTime gameDate = null;
-                    if (!gameDateStr.isEmpty()) {
+                String gameDateStr = g.getOrDefault("gameDate", "").toString();
+                Instant gameDate = null;
+                if (!gameDateStr.isEmpty()) {
+                    try {
+                        gameDate = Instant.parse(gameDateStr);
+                    } catch (Exception e1) {
                         try {
-                            gameDate = LocalDateTime.parse(gameDateStr, DateTimeFormatter.ISO_DATE_TIME);
-                        } catch (Exception e1) {
-                            try {
-                                gameDate = OffsetDateTime.parse(gameDateStr, DateTimeFormatter.ISO_DATE_TIME)
-                                        .toLocalDateTime();
-                            } catch (Exception ignored) {
-                            }
+                            gameDate = OffsetDateTime.parse(gameDateStr, DateTimeFormatter.ISO_DATE_TIME)
+                                    .toInstant();
+                        } catch (Exception ignored) {
                         }
                     }
-
-                    Integer homeScore = null, awayScore = null;
-                    Object homeScoreObj = homeMap.get("score");
-                    Object awayScoreObj = awayMap.get("score");
-                    if (homeScoreObj != null) homeScore = Integer.valueOf(homeScoreObj.toString());
-                    if (awayScoreObj != null) awayScore = Integer.valueOf(awayScoreObj.toString());
-
-                    Map<String, Object> venueMap = (Map<String, Object>) g.get("venue");
-                    String venue = venueMap != null ? venueMap.getOrDefault("name", "").toString() : "";
-
-                    Game game = Game.builder()
-                            .id(gameId)
-                            .homeTeam(homeTeam)
-                            .awayTeam(awayTeam)
-                            .gameDate(gameDate)
-                            .season(season)
-                            .status(status)
-                            .homeScore(homeScore)
-                            .awayScore(awayScore)
-                            .venue(venue)
-                            .gameType(gameType)
-                            .gameNumber(g.get("gameNumber") != null ? Integer.valueOf(g.get("gameNumber").toString()) : 1)
-                            .seriesDescription(g.getOrDefault("seriesDescription", "Regular Season").toString())
-                            .build();
-
-                    gameRepository.save(game);
-                    savedCount++;
-
-                } catch (Exception e) {
-                    log.warn("경기 저장 실패: {}", e.getMessage());
                 }
+
+                Integer homeScore = null, awayScore = null;
+                Object homeScoreObj = homeMap.get("score");
+                Object awayScoreObj = awayMap.get("score");
+                if (homeScoreObj != null) homeScore = Integer.valueOf(homeScoreObj.toString());
+                if (awayScoreObj != null) awayScore = Integer.valueOf(awayScoreObj.toString());
+
+                Map<String, Object> venueMap = (Map<String, Object>) g.get("venue");
+                String venue = venueMap != null ? venueMap.getOrDefault("name", "").toString() : "";
+
+                // ── 이미 있는 경기면 변경된 필드만 갱신 (status, score, gameDate, venue)
+                Optional<Game> existingOpt = gameRepository.findById(gameId);
+                if (existingOpt.isPresent()) {
+                    Game existing = existingOpt.get();
+                    boolean changed =
+                            !Objects.equals(existing.getStatus(), status)
+                            || !Objects.equals(existing.getHomeScore(), homeScore)
+                            || !Objects.equals(existing.getAwayScore(), awayScore)
+                            || !Objects.equals(existing.getGameDate(), gameDate);
+
+                    if (changed) {
+                        existing.syncFromApi(gameDate, status, homeScore, awayScore, venue);
+                        gameRepository.save(existing);
+                        updatedCount++;
+                    }
+                    continue;
+                }
+
+                // ── 새 경기면 신규 저장
+                Map<String, Object> homeTeamMap = (Map<String, Object>) homeMap.get("team");
+                Map<String, Object> awayTeamMap = (Map<String, Object>) awayMap.get("team");
+
+                Long homeTeamId = Long.valueOf(homeTeamMap.get("id").toString());
+                Long awayTeamId = Long.valueOf(awayTeamMap.get("id").toString());
+
+                Team homeTeam = teamRepository.findById(homeTeamId).orElse(null);
+                Team awayTeam = teamRepository.findById(awayTeamId).orElse(null);
+                if (homeTeam == null || awayTeam == null) continue;
+
+                Game game = Game.builder()
+                        .id(gameId)
+                        .homeTeam(homeTeam)
+                        .awayTeam(awayTeam)
+                        .gameDate(gameDate)
+                        .season(season)
+                        .status(status)
+                        .homeScore(homeScore)
+                        .awayScore(awayScore)
+                        .venue(venue)
+                        .gameType(gameType)
+                        .gameNumber(g.get("gameNumber") != null ? Integer.valueOf(g.get("gameNumber").toString()) : 1)
+                        .seriesDescription(g.getOrDefault("seriesDescription", "Regular Season").toString())
+                        .build();
+
+                gameRepository.save(game);
+                savedCount++;
+
+            } catch (Exception e) {
+                log.warn("경기 저장/갱신 실패: {}", e.getMessage());
             }
         }
-
-        log.info("{}시즌 경기 데이터 수집 완료: {}경기", season, savedCount);
     }
+
+    log.info("{}시즌 경기 동기화 완료: 신규 {}건, 갱신 {}건", season, savedCount, updatedCount);
+}
 
     // ================================================
     // 순위 데이터 수집
     // ================================================
     @SuppressWarnings("unchecked")
     private void initStandings(int season) {
-        long count = standingRepository.countBySeason(season);
-        if (count > 0) {
-            log.info("{}시즌 순위 데이터 이미 존재, 스킵", season);
-            return;
-        }
-
-        log.info("{}시즌 순위 데이터 수집 시작...", season);
+        log.info("{}시즌 순위 데이터 동기화 시작...", season);
+        standingRepository.deleteBySeason(season);
+        standingRepository.flush();
 
         // AL(103) + NL(104) 둘 다 조회
         for (int leagueId : List.of(103, 104)) {
@@ -475,13 +490,9 @@ public class DataInitializer implements ApplicationRunner {
     // ================================================
     @SuppressWarnings("unchecked")
     private void initBatterStats(int season, String gameType) {
-        long count = batterStatRepository.countBySeasonAndGameType(season, gameType);
-        if (count > 0) {
-            log.info("{}시즌 타자 스탯({}) 이미 존재, 스킵", season, gameType);
-            return;
-        }
-
-        log.info("{}시즌 타자 스탯({}) 수집 시작...", season, gameType);
+        log.info("{}시즌 타자 스탯({}) 동기화 시작...", season, gameType);
+        batterStatRepository.deleteBySeasonAndGameType(season, gameType);
+        batterStatRepository.flush();
 
         // 정규시즌(R) vs 포스트시즌 전체(PS) API 파라미터
         // PS는 postseason 파라미터로 전체 포스트시즌 집계를 가져옴
@@ -599,13 +610,9 @@ public class DataInitializer implements ApplicationRunner {
     // ================================================
     @SuppressWarnings("unchecked")
     private void initPitcherStats(int season, String gameType) {
-        long count = pitcherStatRepository.countBySeasonAndGameType(season, gameType);
-        if (count > 0) {
-            log.info("{}시즌 투수 스탯({}) 이미 존재, 스킵", season, gameType);
-            return;
-        }
-
-        log.info("{}시즌 투수 스탯({}) 수집 시작...", season, gameType);
+        log.info("{}시즌 투수 스탯({}) 동기화 시작...", season, gameType);
+        pitcherStatRepository.deleteBySeasonAndGameType(season, gameType);
+        pitcherStatRepository.flush();
 
         String statsParam = "season&group=pitching&season=" + season + "&gameType=" + gameType + "&playerPool=All";
 
@@ -1177,6 +1184,15 @@ public class DataInitializer implements ApplicationRunner {
 
                     if (players == null) continue;
 
+                    // MLB API teams.{side}.pitchers 는 등판 순서대로 정렬된 선수 ID 배열
+                    List<Object> pitcherIdsRaw =
+                            (List<Object>) teamData.get("pitchers");
+                    List<Long> pitcherOrder = pitcherIdsRaw == null
+                            ? List.of()
+                            : pitcherIdsRaw.stream()
+                                    .map(o -> Long.valueOf(o.toString()))
+                                    .toList();
+
                     for (Map.Entry<String, Object> entry : players.entrySet()) {
 
                         try {
@@ -1195,12 +1211,26 @@ public class DataInitializer implements ApplicationRunner {
                             Player player =
                                     playerRepository.findById(playerId).orElse(null);
 
+                            // DB에 없는 선수(시즌 중 신규 콜업·로스터 변경 등) →
+                            // initPlayers()는 시즌 초 1회만 도니까 여기서 즉시 보충 조회
+                            if (player == null) {
+                                player = fetchAndSavePlayerOnDemand(playerId, team);
+                            }
+
                             if (player == null) continue;
 
                             Map<String, Object> stats =
                                     (Map<String, Object>) playerData.get("stats");
 
                             if (stats == null) continue;
+
+                            // 그 경기에서 뛴 수비 포지션 (시즌 기본 포지션이 아니라 해당 경기 기준)
+                            // 타자/투수 공통으로 사용
+                            Map<String, Object> gamePositionMap =
+                                    (Map<String, Object>) playerData.get("position");
+                            String gamePosition = gamePositionMap != null
+                                    ? gamePositionMap.getOrDefault("abbreviation", "").toString()
+                                    : "";
 
                             // 타자 기록
                             Map<String, Object> batting =
@@ -1235,6 +1265,7 @@ public class DataInitializer implements ApplicationRunner {
                                         .walks(parseIntSafe(batting.get("baseOnBalls")))
                                         .strikeOuts(parseIntSafe(batting.get("strikeOuts")))
                                         .battingOrder(battingOrder)
+                                        .gamePosition(gamePosition.isEmpty() ? null : gamePosition)
                                         .build();
 
                                 boxScoreRepository.save(boxScore);
@@ -1258,11 +1289,15 @@ public class DataInitializer implements ApplicationRunner {
                                 if (boxScoreRepository.existsByGameIdAndPlayerIdAndPlayerType(
                                         game.getId(), player.getId(), "PITCHER")) continue;
 
+                                int appearanceOrder = pitcherOrder.indexOf(playerId);
+                                if (appearanceOrder == -1) appearanceOrder = 99; // 배열에 없으면 맨 뒤로
+
                                 BoxScore boxScore = BoxScore.builder()
                                         .game(game)
                                         .player(player)
                                         .team(team)
                                         .playerType("PITCHER")
+                                        .appearanceOrder(appearanceOrder)
                                         .inningsPitched(ip)
                                         .earnedRuns(parseIntSafe(pitching.get("earnedRuns")))
                                         .hitsAllowed(parseIntSafe(pitching.get("hits")))
@@ -1271,7 +1306,9 @@ public class DataInitializer implements ApplicationRunner {
                                         .pitchCount(parseIntSafe(pitching.get("pitchesThrown")))
                                         .isWin(false)
                                         .isLoss(false)
+                                        .isHold(false)
                                         .isSave(false)
+                                        .gamePosition(gamePosition.isEmpty() ? "P" : gamePosition)
                                         .build();
 
                                 boxScoreRepository.save(boxScore);
@@ -1295,6 +1332,130 @@ public class DataInitializer implements ApplicationRunner {
         log.info("{} 시즌 BoxScore 수집 완료: {}건", season, saved);
     }
 
+    /**
+     * 특정 경기의 box_score.game_position이 비어있으면 그 경기만 boxscore를 다시 조회해서
+     * gamePosition만 채워 넣는다 (다른 기록은 건드리지 않음).
+     * 시즌 전체를 재수집(TRUNCATE 후 initBoxScores)할 필요 없이, 실제로 수비 박스를 조회하는
+     * 경기에 한해서만 그때그때 채워지도록 하기 위한 지연(lazy) 백필 메서드.
+     * DefenseSnapshotService에서 스냅샷을 만들기 직전에 호출한다.
+     */
+    @SuppressWarnings("unchecked")
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void backfillGamePositionsIfNeeded(Long gameId) {
+
+        if (!boxScoreRepository.existsByGameIdAndGamePositionIsNull(gameId)) return;
+
+        try {
+            Map<String, Object> response = fetchJson("/game/" + gameId + "/boxscore");
+            if (response == null) return;
+
+            Map<String, Object> teams = (Map<String, Object>) response.get("teams");
+            if (teams == null) return;
+
+            // 이 경기의 기존 box_score 행들을 (playerId + playerType) 기준으로 인덱싱
+            List<BoxScore> existingRows = boxScoreRepository.findByGameId(gameId);
+            Map<String, BoxScore> byPlayerKey = new java.util.HashMap<>();
+            for (BoxScore bs : existingRows) {
+                byPlayerKey.put(bs.getPlayer().getId() + "_" + bs.getPlayerType(), bs);
+            }
+
+            int updated = 0;
+
+            for (String side : List.of("home", "away")) {
+
+                Map<String, Object> teamData = (Map<String, Object>) teams.get(side);
+                if (teamData == null) continue;
+
+                Map<String, Object> players = (Map<String, Object>) teamData.get("players");
+                if (players == null) continue;
+
+                for (Map.Entry<String, Object> entry : players.entrySet()) {
+                    try {
+                        Map<String, Object> playerData = (Map<String, Object>) entry.getValue();
+
+                        Map<String, Object> personMap = (Map<String, Object>) playerData.get("person");
+                        if (personMap == null) continue;
+
+                        Long playerId = Long.valueOf(personMap.get("id").toString());
+
+                        Map<String, Object> gamePositionMap = (Map<String, Object>) playerData.get("position");
+                        String gamePosition = gamePositionMap != null
+                                ? gamePositionMap.getOrDefault("abbreviation", "").toString()
+                                : "";
+
+                        for (String playerType : List.of("BATTER", "PITCHER")) {
+                            BoxScore existing = byPlayerKey.get(playerId + "_" + playerType);
+                            if (existing == null || existing.getGamePosition() != null) continue;
+
+                            // insert 경로(initBoxScores)와 동일한 폴백 규칙:
+                            // 투수는 position 파싱이 비어도 최소 "P"는 채워준다.
+                            String resolved = !gamePosition.isEmpty()
+                                    ? gamePosition
+                                    : ("PITCHER".equals(playerType) ? "P" : null);
+                            if (resolved == null) continue;
+
+                            existing.updateGamePosition(resolved);
+                            boxScoreRepository.save(existing);
+                            updated++;
+                        }
+
+                    } catch (Exception e) {
+                        log.warn("gamePosition 백필 중 선수 파싱 실패 (game={}): {}", gameId, e.getMessage());
+                    }
+                }
+            }
+
+            if (updated > 0) {
+                log.info("경기 {} gamePosition 백필 완료: {}건", gameId, updated);
+            }
+
+        } catch (Exception e) {
+            log.warn("경기 {} gamePosition 백필 실패: {}", gameId, e.getMessage());
+        }
+    }
+
+    /**
+     * 특정 시즌 전체를 대상으로 gamePosition 배치 백필.
+     * 경기 하나하나 /defense를 열어보지 않아도, 관리자가 시즌 단위로 한 번에 돌릴 수 있게 하기 위한 용도.
+     * 경기 수가 많으면(시즌당 2000경기+) 시간이 꽤 걸리므로 @Async로 백그라운드에서 실행하고,
+     * 호출한 쪽(AdminController)은 바로 응답을 반환한다.
+     */
+    @org.springframework.scheduling.annotation.Async
+    public void backfillGamePositionsForSeason(int season) {
+
+        List<Game> games = gameRepository.findBySeasonAndStatusIn(
+                season, List.of("Final", "Completed Early"));
+
+        log.info("{} 시즌 gamePosition 배치 백필 시작 — 대상 경기 {}건", season, games.size());
+
+        int processed = 0;
+        int skipped = 0;
+
+        for (Game game : games) {
+            try {
+                if (!boxScoreRepository.existsByGameIdAndGamePositionIsNull(game.getId())) {
+                    skipped++;
+                    continue;
+                }
+
+                backfillGamePositionsIfNeeded(game.getId());
+                processed++;
+
+                if (processed % 100 == 0) {
+                    log.info("{} 시즌 gamePosition 백필 진행 중... {}/{}", season, processed, games.size());
+                }
+
+                Thread.sleep(50);
+
+            } catch (Exception e) {
+                log.warn("{} 시즌 백필 중 경기 {} 처리 실패: {}", season, game.getId(), e.getMessage());
+            }
+        }
+
+        log.info("{} 시즌 gamePosition 배치 백필 완료 — 처리 {}건, 스킵(이미 채워짐) {}건",
+                season, processed, skipped);
+    }
+
     // ======================================================
     // HotColdZone 데이터 수집 (13존: 내부 9존 [3][3] + 외부 4존)
     //
@@ -1308,20 +1469,15 @@ public class DataInitializer implements ApplicationRunner {
     @SuppressWarnings("unchecked")
     private void initHotColdZones(int season, String gameType) {
 
-        log.info("{} 시즌 HotColdZone({}) 수집 시작...", season, gameType);
+        log.info("{} 시즌 HotColdZone({}) 동기화 시작...", season, gameType);
+        hotColdZoneRepository.deleteBySeasonAndGameType(season, gameType);
+        hotColdZoneRepository.flush();
 
         List<Player> players = playerRepository.findAll();
-
         int saved = 0;
 
         for (Player player : players) {
-
             try {
-
-                if (hotColdZoneRepository.existsByPlayerIdAndSeasonAndGameType(
-                        player.getId(), season, gameType)) {
-                    continue;
-                }
 
                 Map<String, Object> response = fetchJson(
                         "/people/" + player.getId()
@@ -1629,7 +1785,9 @@ public class DataInitializer implements ApplicationRunner {
     @SuppressWarnings("unchecked")
     private void initBatterSituationStats(int season, String gameType) {
 
-        log.info("{} 시즌 BatterSituationStat 수집 시작...", season);
+        log.info("{} 시즌 BatterSituationStat 동기화 시작...", season);
+        batterSituationStatRepository.deleteBySeasonAndGameType(season, gameType);
+        batterSituationStatRepository.flush();
 
         // 수집할 상황 코드 목록 — 추후 여기에 추가
         List<String> sitCodes = List.of("risp");
@@ -1641,11 +1799,6 @@ public class DataInitializer implements ApplicationRunner {
         for (Player player : players) {
             for (String sitCode : sitCodes) {
                 try {
-
-                    if (batterSituationStatRepository.existsByPlayerIdAndSeasonAndSitCodeAndGameType(
-                            player.getId(), season, sitCode, gameType)) {
-                        continue;
-                    }
 
                     String statsType = "statSplits";
                     Map<String, Object> response = fetchJson(
@@ -1835,19 +1988,17 @@ public class DataInitializer implements ApplicationRunner {
     // API: /people/{id}/stats?stats=byMonth&season={s}&group=hitting
     // ================================================
     @SuppressWarnings("unchecked")
-    private void initPlayerMonthlyStats(int season) {
+   private void initPlayerMonthlyStats(int season) {
 
-        log.info("{} 시즌 PlayerMonthlyStat 수집 시작...", season);
+    log.info("{} 시즌 PlayerMonthlyStat 동기화 시작...", season);
+    playerMonthlyStatRepository.deleteBySeason(season);
+    playerMonthlyStatRepository.flush();
 
-        List<Player> players = playerRepository.findAll();
-        int saved = 0;
+    List<Player> players = playerRepository.findAll();
+    int saved = 0;
 
-        for (Player player : players) {
-            try {
-                // 이미 해당 시즌 데이터가 1개라도 있으면 스킵
-                if (playerMonthlyStatRepository
-                        .findByPlayerIdAndSeasonOrderByMonth(player.getId(), season)
-                        .size() > 0) continue;
+    for (Player player : players) {
+        try {
 
                 Map<String, Object> response = fetchJson(
                         "/people/" + player.getId()
@@ -1926,14 +2077,9 @@ public class DataInitializer implements ApplicationRunner {
     @SuppressWarnings("unchecked")
     private void initBatterVsPitcher(int season, String gameType) {
 
-        log.info("{} 시즌 BatterVsPitcher 집계 시작...", season);
-
-        long existing = batterVsPitcherRepository
-                .countBySeasonAndGameType(season, gameType);
-        if (existing > 0) {
-            log.info("BatterVsPitcher({}) 이미 데이터 존재 ({}건), 스킵", gameType, existing);
-            return;
-        }
+        log.info("{} 시즌 BatterVsPitcher 동기화 시작...", season);
+        batterVsPitcherRepository.deleteBySeasonAndGameType(season, gameType);
+        batterVsPitcherRepository.flush();
 
         List<Object[]> rows = batterVsPitcherRepository.aggregateByGameType(season, gameType);
         int saved = 0;
@@ -1979,10 +2125,78 @@ public class DataInitializer implements ApplicationRunner {
     // ================================================
 
     /**
-     * WebClient GET 공통 헬퍼.
-     * 4xx/5xx 포함 모든 에러를 삼키고 null 반환 → 호출부에서 null 체크만 하면 됨.
+     * 박스스코어/스탯 수집 중 DB에 없는 선수를 만났을 때 즉시 단건 조회해서 저장.
+     * initPlayers()는 시즌 초 한 번만 fullRoster를 도므로,
+     * 시즌 중 신규 콜업·트레이드·방출 후 복귀 등으로 로스터가 바뀐 선수는
+     * 박스스코어 수집 시점에 비로소 등장하는 경우가 많아 여기서 보충한다.
      */
     @SuppressWarnings("unchecked")
+    private Player fetchAndSavePlayerOnDemand(Long playerId, Team team) {
+        try {
+            Map<String, Object> detailResponse = fetchJson("/people/" + playerId);
+            if (detailResponse == null) return null;
+
+            List<Map<String, Object>> people =
+                    (List<Map<String, Object>>) detailResponse.get("people");
+            if (people == null || people.isEmpty()) return null;
+
+            Map<String, Object> p = people.get(0);
+
+            String firstName = p.getOrDefault("firstName", "").toString();
+            String lastName = p.getOrDefault("lastName", "").toString();
+            String fullName = p.getOrDefault("fullName", "").toString();
+            String nationality = p.getOrDefault("birthCountry", "").toString();
+
+            Map<String, Object> batSideMap = (Map<String, Object>) p.get("batSide");
+            Map<String, Object> pitchHandMap = (Map<String, Object>) p.get("pitchHand");
+
+            String batSide = batSideMap != null ? batSideMap.getOrDefault("code", "").toString() : "";
+            String pitchHand = pitchHandMap != null ? pitchHandMap.getOrDefault("code", "").toString() : "";
+
+            LocalDate dateOfBirth = null;
+            String dob = p.getOrDefault("birthDate", "").toString();
+            if (!dob.isEmpty()) {
+                try {
+                    dateOfBirth = LocalDate.parse(dob);
+                } catch (Exception ignored) {
+                }
+            }
+
+            Map<String, Object> primaryPositionMap = (Map<String, Object>) p.get("primaryPosition");
+            String position = primaryPositionMap != null
+                    ? primaryPositionMap.getOrDefault("abbreviation", "").toString()
+                    : "";
+
+            String jerseyNumber = p.getOrDefault("primaryNumber", "").toString();
+
+            Player player = Player.builder()
+                    .id(playerId)
+                    .team(team)
+                    .fullName(fullName.isEmpty() ? "Unknown" : fullName)
+                    .firstName(firstName)
+                    .lastName(lastName)
+                    .position(position)
+                    .shirtNumber(jerseyNumber)
+                    .batSide(batSide)
+                    .pitchHand(pitchHand)
+                    .dateOfBirth(dateOfBirth)
+                    .nationality(nationality)
+                    .photoUrl("https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/"
+                            + playerId + "/headshot/67/current")
+                    .isActive(true)
+                    .build();
+
+            playerRepository.save(player);
+            log.info("[선수 보충 저장] {} ({})", fullName, playerId);
+
+            return player;
+
+        } catch (Exception e) {
+            log.warn("[선수 보충 저장 실패] playerId={} → {}", playerId, e.getMessage());
+            return null;
+        }
+    }
+
     private Map<String, Object> fetchJson(String uri) {
         try {
             return webClient.get()
